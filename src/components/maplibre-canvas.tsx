@@ -5,7 +5,7 @@ import type { ExpressionSpecification, Map as MapLibreMap } from "maplibre-gl";
 import { MAP_PALETTE } from "@/lib/map-theme";
 import { BOUNDARY_ATTRIBUTION, restrictCameraToToronto, TORONTO_BOUNDS, TORONTO_MIN_ZOOM } from "@/lib/city-boundary";
 import { TORONTO_DISTANT_MASK, TORONTO_FADE_COORDINATES, TORONTO_FADE_IMAGE, TORONTO_MASK_COLOR } from "@/lib/city-boundary-presentation";
-import ClosureToolbox from "./closure-toolbox";
+import DisruptionToolbox from "./disruption-toolbox";
 import MapControls from "./map-controls";
 
 const BUILDING_COLOR: ExpressionSpecification = [
@@ -149,7 +149,7 @@ export default function MapLibreCanvas() {
     <main className="map-page" aria-label="Toronto street map">
       <div ref={containerRef} className="map-container" />
       <MapControls map={ready ? mapRef.current : null} is3D={is3D} onViewChange={changeView} />
-      {ready && mapRef.current ? <ClosureToolbox map={mapRef.current} /> : null}
+      {ready && mapRef.current ? <DisruptionToolbox map={mapRef.current} /> : null}
       {status ? <p className="map-message" role="status">{status}</p> : null}
       {error ? (
         <div className="map-message map-error" role="alert">

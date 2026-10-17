@@ -426,18 +426,51 @@ button {
   color: var(--ui-ink);
 }
 
+.disruption-tool-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 18px;
+}
+
+[data-kind="closure"] {
+  --disruption-color: #c75044;
+  --disruption-ink: #8c392f;
+  --disruption-rgb: 199 80 68;
+}
+
+[data-kind="event"] {
+  --disruption-color: #7454b6;
+  --disruption-ink: #56388f;
+  --disruption-rgb: 116 84 182;
+}
+
+[data-kind="accident"] {
+  --disruption-color: #c03e59;
+  --disruption-ink: #972b43;
+  --disruption-rgb: 192 62 89;
+}
+
+[data-kind="construction"] {
+  --disruption-color: #ae671b;
+  --disruption-ink: #7c4a12;
+  --disruption-rgb: 174 103 27;
+}
+
 .closure-drag-tool {
+  position: relative;
   display: flex;
-  align-items: center;
-  gap: 12px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
   width: 100%;
-  margin-top: 20px;
-  padding: 13px 11px;
+  margin: 0;
+  padding: 12px;
   border: 1px solid rgb(255 255 255 / 86%);
   border-radius: 17px;
-  background: linear-gradient(125deg, rgb(255 239 230 / 42%), rgb(255 255 255 / 18%));
-  box-shadow: var(--glass-inner), 0 3px 12px rgb(142 72 53 / 5%);
-  color: #893b30;
+  background: linear-gradient(125deg, rgb(var(--disruption-rgb) / 10%), rgb(255 255 255 / 20%));
+  box-shadow: var(--glass-inner), 0 3px 12px rgb(38 78 105 / 5%);
+  color: var(--disruption-ink);
   text-align: left;
   touch-action: none;
   user-select: none;
@@ -446,8 +479,8 @@ button {
 
 .closure-drag-tool:hover,
 .closure-drag-tool[aria-pressed="true"] {
-  border-color: rgb(204 116 94 / 50%);
-  background: linear-gradient(125deg, rgb(255 229 215 / 62%), rgb(255 248 244 / 38%));
+  border-color: rgb(var(--disruption-rgb) / 45%);
+  background: linear-gradient(125deg, rgb(var(--disruption-rgb) / 18%), rgb(255 255 255 / 40%));
 }
 
 .closure-drag-tool:active {
@@ -467,9 +500,9 @@ button {
   height: 36px;
   border: 1px solid rgb(255 255 255 / 75%);
   border-radius: 12px;
-  background: linear-gradient(135deg, rgb(255 252 247 / 50%), rgb(255 203 180 / 35%));
+  background: linear-gradient(135deg, rgb(255 255 255 / 65%), rgb(var(--disruption-rgb, 199 80 68) / 20%));
   box-shadow: var(--glass-inner);
-  color: #a24132;
+  color: var(--disruption-ink, #a24132);
 }
 
 .closure-drag-tool strong,
@@ -478,27 +511,38 @@ button {
 }
 
 .closure-drag-tool strong {
-  font-size: 13px;
+  margin-top: 10px;
+  font-size: 12px;
   font-weight: 650;
+  line-height: 1.4;
 }
 
 .closure-drag-tool small {
   margin-top: 5px;
-  color: #80564b;
-  font-size: 11px;
+  color: var(--ui-muted);
+  font-size: 10px;
 }
 
 .closure-grip {
-  margin-left: auto;
-  color: #9b7267;
-  font-size: 24px;
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  color: var(--disruption-ink);
+  font-size: 21px;
+  opacity: 0.6;
 }
 
 .toolbox-help {
   margin: 11px 0 17px;
   color: var(--ui-muted);
-  font-size: 12px;
+  font-size: 11px;
   line-height: 1.65;
+}
+
+.toolbox-loading {
+  margin: 0 0 12px;
+  color: var(--ui-muted);
+  font-size: 11px;
 }
 
 .toolbox-coverage {
@@ -553,6 +597,21 @@ button {
 
 .closure-list > button > span:nth-child(2) {
   flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.disruption-list-icon {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 22px;
+  color: var(--disruption-ink);
+}
+
+.disruption-list-icon svg {
+  width: 18px;
+  height: 18px;
 }
 
 .closure-list small {
@@ -568,7 +627,69 @@ button {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #da594b;
+  background: var(--disruption-color, #da594b);
+}
+
+.disruption-markers {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.disruption-marker {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: grid;
+  place-items: center;
+  visibility: hidden;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid rgb(255 255 255 / 95%);
+  border-radius: 13px;
+  background: var(--disruption-color);
+  box-shadow: 0 4px 12px rgb(38 78 105 / 22%), inset 0 1px 0 rgb(255 255 255 / 35%);
+  color: #fff;
+  pointer-events: auto;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.disruption-marker::after {
+  position: absolute;
+  bottom: -5px;
+  left: 17px;
+  width: 8px;
+  height: 8px;
+  border-right: 1px solid rgb(255 255 255 / 95%);
+  border-bottom: 1px solid rgb(255 255 255 / 95%);
+  background: var(--disruption-color);
+  transform: rotate(45deg);
+  pointer-events: none;
+  content: "";
+}
+
+.disruption-marker:active {
+  cursor: grabbing;
+}
+
+.disruption-marker:focus-visible {
+  outline: 2px solid #215c83;
+  outline-offset: 4px;
+}
+
+.disruption-marker.is-preview {
+  border-style: dashed;
+  pointer-events: none;
+}
+
+.disruption-markers.is-placing .disruption-marker {
+  opacity: 0.6;
+  pointer-events: none;
 }
 
 .closure-preview {
@@ -607,6 +728,77 @@ button {
   font-size: 11px;
 }
 
+.disruption-editor {
+  max-height: calc(100dvh - 112px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.disruption-editor .disruption-location {
+  margin-top: 14px;
+  font-size: 11px;
+}
+
+.disruption-field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  margin-top: 12px;
+  color: var(--ui-ink);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.disruption-field input,
+.disruption-field select {
+  width: 100%;
+  min-width: 0;
+  min-height: 38px;
+  padding: 9px 10px;
+  border: 1px solid rgb(255 255 255 / 90%);
+  border-radius: 10px;
+  background: rgb(255 255 255 / 50%);
+  box-shadow: var(--glass-inner);
+  color: var(--ui-ink);
+  font: 400 12px "Avenir Next", "Segoe UI", sans-serif;
+}
+
+.disruption-field input:focus-visible,
+.disruption-field select:focus-visible {
+  outline: 2px solid #4384b1;
+  outline-offset: 1px;
+}
+
+.disruption-optional {
+  color: var(--ui-muted);
+  font-size: 10px;
+  font-weight: 400;
+}
+
+.disruption-schedule {
+  margin: 16px 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.disruption-schedule legend {
+  padding: 0;
+  color: var(--ui-ink);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.disruption-schedule .disruption-field {
+  margin-top: 9px;
+  font-size: 11px;
+}
+
+.disruption-editor .disruption-form-error {
+  margin-top: 12px;
+  color: #963e33;
+  font-size: 12px;
+}
+
 .closure-preview-actions {
   display: flex;
   justify-content: flex-end;
@@ -636,6 +828,11 @@ button {
 .closure-preview-actions .closure-remove {
   border-color: rgb(190 91 74 / 24%);
   color: #963e33;
+}
+
+.disruption-editor .closure-apply {
+  border-color: rgb(255 255 255 / 65%);
+  background: var(--disruption-ink);
 }
 
 .closure-preview-actions button:hover {
@@ -702,7 +899,7 @@ button {
 }
 
 .closure-ghost.is-snapped > span {
-  background: rgb(181 68 53 / 88%);
+  background: var(--disruption-color, #b54435);
   color: #fff;
 }
 
@@ -834,7 +1031,7 @@ button {
   }
 
   .closure-ghost.is-snapped > span {
-    background: #ac4135;
+    background: var(--disruption-ink, #ac4135);
   }
 }
 
@@ -868,6 +1065,10 @@ button {
     bottom: 62px;
     left: 12px;
     width: auto;
+  }
+
+  .disruption-editor {
+    max-height: calc(100dvh - 150px);
   }
 
   .closure-placement-help {
