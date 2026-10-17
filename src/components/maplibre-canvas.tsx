@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { ExpressionSpecification, Map as MapLibreMap } from "maplibre-gl";
 import { MAP_PALETTE } from "@/lib/map-theme";
-import { BOUNDARY_ATTRIBUTION, restrictCameraToToronto, TORONTO_BOUNDS, TORONTO_MIN_ZOOM } from "@/lib/city-boundary";
+import { BOUNDARY_ATTRIBUTION, restrictCameraToToronto, TORONTO_BOUNDARY, TORONTO_BOUNDS, TORONTO_MIN_ZOOM } from "@/lib/city-boundary";
+import { is3DPitch } from "@/lib/map-view";
 import { TORONTO_DISTANT_MASK, TORONTO_FADE_COORDINATES, TORONTO_FADE_IMAGE, TORONTO_MASK_COLOR } from "@/lib/city-boundary-presentation";
 import MapWorkspace from "./map-workspace";
 import MapControls from "./map-controls";
@@ -25,6 +26,7 @@ export default function MapLibreCanvas() {
   const [status, setStatus] = useState("Loading Toronto map…");
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
+  const is3DRef = useRef(false);
   const [is3D, setIs3D] = useState(false);
 
   useEffect(() => {
@@ -73,6 +75,21 @@ export default function MapLibreCanvas() {
             map.setPaintProperty("building", "fill-color", BUILDING_COLOR);
             map.setPaintProperty("building", "fill-outline-color", "#a5c8df");
           }
+          // Labels and highway shields only appear for features inside Toronto.
+          for (const layer of map.getStyle().layers) {
+            if (layer.type !== "symbol" || !("source" in layer) || layer.source !== "openmaptiles") continue;
+            const existing = map.getFilter(layer.id);
+            map.setFilter(layer.id, (existing ? ["all", existing, ["within", TORONTO_BOUNDARY]] : ["within", TORONTO_BOUNDARY]) as ExpressionSpecification);
+          }
+          // Tilting with two fingers (or ctrl-drag) switches into the 3D view; flattening returns to 2D.
+          map.on("pitchend", () => {
+            if (!map) return;
+            const next = is3DPitch(map.getPitch(), is3DRef.current);
+            if (next === is3DRef.current) return;
+            is3DRef.current = next;
+            if (map.getLayer("toronto-3d-buildings")) map.setLayoutProperty("toronto-3d-buildings", "visibility", next ? "visible" : "none");
+            setIs3D(next);
+          });
           const labelLayer = map.getStyle().layers.find((layer) => layer.type === "symbol" && layer.layout?.["text-field"]);
           map.addLayer({
             id: "toronto-3d-buildings",
@@ -140,6 +157,7 @@ export default function MapLibreCanvas() {
   function changeView(nextIs3D: boolean) {
     const map = mapRef.current;
     if (!map || !ready) return;
+    is3DRef.current = nextIs3D;
     map.setLayoutProperty("toronto-3d-buildings", "visibility", nextIs3D ? "visible" : "none");
     map.easeTo({
       pitch: nextIs3D ? 55 : 0,

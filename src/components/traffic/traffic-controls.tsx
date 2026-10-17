@@ -3,6 +3,7 @@ import { useState } from "react";
 import { CLOCK_RATES, torontoNow, type ClockState } from "@/lib/traffic/clock";
 import { formatClock, MINUTES_PER_DAY } from "@/lib/traffic/model";
 import type { DayType } from "@/lib/traffic/types";
+import { AnimatePresence, motion, type Transition } from "motion/react";
 import GlassSurface from "../glass-surface";
 import SlidingControl from "../sliding-control";
 const TICKS = [0, 360, 720, 1080, 1440];
@@ -20,16 +21,28 @@ type Props = {
     scenario?: { text: string; retry?: () => void; compare: "before" | "after"; onCompare: (mode: "before" | "after") => void } | null;
     onChange: (change: Partial<ClockState>) => void;
 };
+const PANEL_SPRING: Transition = { type: "spring", stiffness: 260, damping: 25 };
+const FADE = { initial: { opacity: 0 }, animate: { opacity: 1, transition: { duration: 0.2, delay: 0.08 } }, exit: { opacity: 0, transition: { duration: 0.1 } } };
+const MINIMIZED_KEY = "toronto-sandbox:controls-minimized";
+
 export default function TrafficControls({ clock, profile, vehicles, closures, scenario, onChange }: Props) {
     const [scrubbing, setScrubbing] = useState(false);
+    const [minimized, setMinimized] = useState(() => { try { return localStorage.getItem(MINIMIZED_KEY) === "1"; } catch { return false; } });
+    const toggleMinimized = () => setMinimized((value) => {
+        try { localStorage.setItem(MINIMIZED_KEY, value ? "0" : "1"); } catch { /* storage unavailable */ }
+        return !value;
+    });
     const live = clock.rate.id === "live";
     const chooseRate = (id: string) => {
         const rate = CLOCK_RATES.find((item) => item.id === id) ?? CLOCK_RATES[1];
         onChange(rate.id === "live" ? { rate, playing: true, ...torontoNow() } : { rate, playing: true });
     };
     const chooseDay = (day: DayType) => onChange({ day, rate: live ? CLOCK_RATES[1] : clock.rate });
-    return (<div className="traffic-controls-shell" data-map-ui><GlassSurface variant="panel"><section className="traffic-controls" aria-label="Typical traffic playback">
-      <div className="traffic-controls-row">
+    const minimizeButton = <button type="button" className="traffic-minimize" aria-label={minimized ? "Expand traffic playback" : "Minimize traffic playback"} aria-expanded={!minimized} onClick={toggleMinimized}>
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d={minimized ? "M3.5 10l4.5-4.5 4.5 4.5" : "M3.5 6l4.5 4.5 4.5-4.5"} /></svg>
+      </button>;
+    return (<div className="traffic-controls-shell" data-map-ui data-minimized={minimized}><GlassSurface variant="panel"><motion.section layout transition={PANEL_SPRING} style={{ borderRadius: 24 }} className="traffic-controls" aria-label="Typical traffic playback">
+      <motion.div layout="position" className="traffic-controls-row">
         <button type="button" className="traffic-play" aria-label={clock.playing ? "Pause traffic playback" : "Play traffic playback"} onClick={() => onChange({ playing: !clock.playing })}>
           {clock.playing ? (<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="2" width="3.5" height="12" rx="1"/><rect x="9.5" y="2" width="3.5" height="12" rx="1"/></svg>) : (<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.2v11.6a.7.7 0 0 0 1.06.6l9.3-5.8a.7.7 0 0 0 0-1.2l-9.3-5.8A.7.7 0 0 0 4 2.2z"/></svg>)}
         </button>
@@ -39,6 +52,8 @@ export default function TrafficControls({ clock, profile, vehicles, closures, sc
             Typical {clock.day} · {live ? "current Toronto time" : "playback"}
           </span>
         </div>
+        <AnimatePresence initial={false} mode="popLayout">
+        {minimized ? null : <motion.div key="options" className="traffic-controls-options" {...FADE}>
         <SlidingControl className="traffic-segmented" label="Day type" value={clock.day}>
           {(["weekday", "weekend"] as const).map((day) => (<button key={day} type="button" aria-pressed={clock.day === day} onClick={() => chooseDay(day)}>
               {day === "weekday" ? "Weekday" : "Weekend"}
@@ -49,7 +64,12 @@ export default function TrafficControls({ clock, profile, vehicles, closures, sc
               {rate.label}
             </button>))}
         </SlidingControl>
-      </div>
+        </motion.div>}
+        </AnimatePresence>
+        {minimizeButton}
+      </motion.div>
+      <AnimatePresence initial={false}>
+      {minimized ? null : <motion.div key="details" layout="position" className="traffic-controls-details" {...FADE}>
       {scenario ? <div className="traffic-segmented traffic-compare" role="group" aria-label="Compare with normal traffic">
         {(["before", "after"] as const).map((mode) => <button key={mode} type="button" aria-pressed={scenario.compare === mode} onClick={() => scenario.onCompare(mode)}>{mode === "before" ? "Before" : "After"}</button>)}
       </div> : null}
@@ -64,5 +84,7 @@ export default function TrafficControls({ clock, profile, vehicles, closures, sc
           {TICKS.map((minute) => <span key={minute}>{minute === 1440 ? "12 AM" : formatClock(minute).replace(":00", "")}</span>)}
         </div>
       </div>
-    </section></GlassSurface></div>);
+      </motion.div>}
+      </AnimatePresence>
+    </motion.section></GlassSurface></div>);
 }

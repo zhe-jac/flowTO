@@ -67,6 +67,11 @@ export function createMapLighting(map: MapboxMap | MapLibreMap, renderer: "mapbo
       const next: Record<string, unknown> = { lightPreset: light.phase, ...mapboxBasemapColors(daylight) };
       // Only send settings that changed, so each dawn/dusk step re-evaluates as little of the style as possible.
       if (Object.entries(next).some(([property, value]) => current[property] !== value)) mapbox.setConfig("basemap", { ...current, ...next });
+      // The Toronto-only street names are a custom layer, so they blend with the light separately.
+      if (mapbox.getLayer("toronto-road-labels")) {
+        mapbox.setPaintProperty("toronto-road-labels", "text-color", blendValue(MAP_NIGHT_PALETTE.roadLabels, MAP_PALETTE.roadLabels, daylight));
+        mapbox.setPaintProperty("toronto-road-labels", "text-halo-color", blendValue(MAP_NIGHT_PALETTE.land, "#ffffff", daylight));
+      }
     } else applyFallback?.(daylight);
     const boundary: BoundaryMap = map;
     if (boundary.getLayer("outside-toronto-mask")) boundary.setPaintProperty("outside-toronto-mask", "fill-color", blendValue(TORONTO_NIGHT_MASK_COLOR, TORONTO_MASK_COLOR, daylight));
