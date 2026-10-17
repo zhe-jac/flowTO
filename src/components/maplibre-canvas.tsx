@@ -2,10 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { ExpressionSpecification, Map as MapLibreMap } from "maplibre-gl";
-import { openFreeMapBuildings, type BuildingSource } from "@/components/traffic/building-layers";
-import TrafficOverlay, { type OverlayPlacement } from "@/components/traffic/traffic-overlay";
 import { MAP_PALETTE } from "@/lib/map-theme";
-import { BOUNDARY_ATTRIBUTION, OUTSIDE_TORONTO_MASK, restrictCameraToToronto, TORONTO_BOUNDARY, TORONTO_BOUNDS, TORONTO_MIN_ZOOM } from "@/lib/city-boundary";
+import { BOUNDARY_ATTRIBUTION, restrictCameraToToronto, TORONTO_BOUNDS, TORONTO_MIN_ZOOM } from "@/lib/city-boundary";
+import { TORONTO_DISTANT_MASK, TORONTO_FADE_COORDINATES, TORONTO_FADE_IMAGE, TORONTO_MASK_COLOR } from "@/lib/city-boundary-presentation";
+import MapWorkspace from "./map-workspace";
+import MapControls from "./map-controls";
 
 const BUILDING_COLOR: ExpressionSpecification = [
   "interpolate",
@@ -25,7 +26,6 @@ export default function MapLibreCanvas() {
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const [is3D, setIs3D] = useState(false);
-  const [traffic, setTraffic] = useState<{ map: MapLibreMap; placement: OverlayPlacement; loadBuildings: () => Promise<BuildingSource> } | null>(null);
 
   useEffect(() => {
     let map: MapLibreMap | undefined;
@@ -35,7 +35,7 @@ export default function MapLibreCanvas() {
 
     async function initialize() {
       try {
-        const { Map, NavigationControl, setWorkerUrl } = await import("maplibre-gl");
+        const { Map, setWorkerUrl } = await import("maplibre-gl");
         if (disposed || !containerRef.current) return;
 
         setWorkerUrl(new URL("maplibre-gl/dist/maplibre-gl-worker.mjs", import.meta.url).toString());
@@ -56,7 +56,6 @@ export default function MapLibreCanvas() {
 
         mapRef.current = map;
         releaseBoundary = restrictCameraToToronto(map);
-        map.addControl(new NavigationControl({ visualizePitch: true }), "top-right");
         map.on("load", () => {
           if (disposed || !map) return;
           for (const layer of map.getStyle().layers) {
@@ -64,13 +63,9 @@ export default function MapLibreCanvas() {
             if (layer.type === "background") map.setPaintProperty(layer.id, "background-color", MAP_PALETTE.land);
             if (layer.type === "fill" && sourceLayer === "water") map.setPaintProperty(layer.id, "fill-color", MAP_PALETTE.water);
             if (layer.type === "fill" && sourceLayer === "park") map.setPaintProperty(layer.id, "fill-color", MAP_PALETTE.greenspace);
-            // Neutral road colours keep yellow/orange/red reserved for traffic conditions.
             if (layer.type === "line" && sourceLayer === "transportation" && !/path|rail|ferry|cable|pier/.test(layer.id)) {
               const major = /motorway|trunk/.test(layer.id);
-              const color = layer.id.includes("casing") ? (major ? "#b4cde0" : "#cddfeb")
-                : major ? MAP_PALETTE.motorways
-                : /primary|secondary|link/.test(layer.id) ? MAP_PALETTE.trunks
-                : MAP_PALETTE.roads;
+              const color = layer.id.includes("casing") ? (major ? "#b4cde0" : "#cddfeb") : major ? MAP_PALETTE.motorways : /primary|secondary|link/.test(layer.id) ? MAP_PALETTE.trunks : MAP_PALETTE.roads;
               map.setPaintProperty(layer.id, "line-color", color);
             }
           }
@@ -79,23 +74,37 @@ export default function MapLibreCanvas() {
             map.setPaintProperty("building", "fill-outline-color", "#a5c8df");
           }
           const labelLayer = map.getStyle().layers.find((layer) => layer.type === "symbol" && layer.layout?.["text-field"]);
-          // 3D buildings are drawn by the traffic overlay, which can make individual tall buildings see-through.
-          map.addSource("toronto-boundary", { type: "geojson", data: TORONTO_BOUNDARY, attribution: BOUNDARY_ATTRIBUTION, tolerance: 0 });
-          map.addSource("outside-toronto", { type: "geojson", data: OUTSIDE_TORONTO_MASK, tolerance: 0 });
+          map.addLayer({
+            id: "toronto-3d-buildings",
+            source: "openmaptiles",
+            "source-layer": "building",
+            type: "fill-extrusion",
+            minzoom: 14,
+            filter: ["!=", ["get", "hide_3d"], true],
+            layout: { visibility: "none" },
+            paint: {
+              "fill-extrusion-color": BUILDING_COLOR,
+              "fill-extrusion-height": ["to-number", ["get", "render_height"], 6],
+              "fill-extrusion-base": ["to-number", ["get", "render_min_height"], 0],
+              "fill-extrusion-opacity": 0.92,
+              "fill-extrusion-vertical-gradient": true,
+            },
+          }, labelLayer?.id);
+          map.addSource("outside-toronto", { type: "geojson", data: TORONTO_DISTANT_MASK, attribution: BOUNDARY_ATTRIBUTION, tolerance: 0 });
+          map.addSource("toronto-boundary-fade", { type: "image", url: TORONTO_FADE_IMAGE, coordinates: TORONTO_FADE_COORDINATES });
           map.addLayer({
             id: "outside-toronto-mask",
             type: "fill",
             source: "outside-toronto",
-            paint: { "fill-color": "#dfeef7", "fill-opacity": 1 },
+            paint: { "fill-color": TORONTO_MASK_COLOR, "fill-opacity": 1, "fill-antialias": false },
           });
           map.addLayer({
-            id: "toronto-city-outline",
-            type: "line",
-            source: "toronto-boundary",
-            paint: { "line-color": "#78a9c8", "line-width": 1.5, "line-opacity": 0.85 },
+            id: "toronto-boundary-fade",
+            type: "raster",
+            source: "toronto-boundary-fade",
+            paint: { "raster-fade-duration": 0, "raster-resampling": "linear" },
           });
           setReady(true);
-          setTraffic({ map, placement: { beforeId: labelLayer?.id }, loadBuildings: openFreeMapBuildings });
           setStatus("");
           setError(null);
         });
@@ -123,7 +132,6 @@ export default function MapLibreCanvas() {
       disposed = true;
       resizeObserver?.disconnect();
       releaseBoundary?.();
-      setTraffic(null);
       map?.remove();
       mapRef.current = null;
     };
@@ -132,6 +140,7 @@ export default function MapLibreCanvas() {
   function changeView(nextIs3D: boolean) {
     const map = mapRef.current;
     if (!map || !ready) return;
+    map.setLayoutProperty("toronto-3d-buildings", "visibility", nextIs3D ? "visible" : "none");
     map.easeTo({
       pitch: nextIs3D ? 55 : 0,
       bearing: nextIs3D ? -20 : 0,
@@ -144,11 +153,8 @@ export default function MapLibreCanvas() {
   return (
     <main className="map-page" aria-label="Toronto street map">
       <div ref={containerRef} className="map-container" />
-      {traffic ? <TrafficOverlay {...traffic} /> : null}
-      <div className="map-view-toggle" role="group" aria-label="Map view">
-        <button type="button" aria-pressed={!is3D} disabled={!ready} onClick={() => changeView(false)}>2D</button>
-        <button type="button" aria-pressed={is3D} disabled={!ready} onClick={() => changeView(true)}>3D</button>
-      </div>
+      <MapControls map={ready ? mapRef.current : null} is3D={is3D} onViewChange={changeView} />
+      {ready && mapRef.current ? <MapWorkspace map={mapRef.current} renderer="maplibre" /> : null}
       {status ? <p className="map-message" role="status">{status}</p> : null}
       {error ? (
         <div className="map-message map-error" role="alert">

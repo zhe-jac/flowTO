@@ -2,10 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { Map as MapboxMap } from "mapbox-gl";
-import { MAPBOX_BUILDINGS, type BuildingSource } from "@/components/traffic/building-layers";
-import TrafficOverlay, { type OverlayPlacement } from "@/components/traffic/traffic-overlay";
-import { MAP_PALETTE, MAPBOX_BASEMAP_CONFIG } from "@/lib/map-theme";
-import { BOUNDARY_ATTRIBUTION, OUTSIDE_TORONTO_MASK, restrictCameraToToronto, TORONTO_BOUNDARY, TORONTO_BOUNDS, TORONTO_MIN_ZOOM } from "@/lib/city-boundary";
+import { MAPBOX_BASEMAP_CONFIG } from "@/lib/map-theme";
+import { BOUNDARY_ATTRIBUTION, restrictCameraToToronto, TORONTO_BOUNDS, TORONTO_MIN_ZOOM } from "@/lib/city-boundary";
+import { TORONTO_DISTANT_MASK, TORONTO_FADE_COORDINATES, TORONTO_FADE_IMAGE, TORONTO_MASK_COLOR } from "@/lib/city-boundary-presentation";
+import MapWorkspace from "./map-workspace";
+import MapControls from "./map-controls";
 
 export default function MapboxCanvas({ accessToken }: { accessToken: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -14,7 +15,6 @@ export default function MapboxCanvas({ accessToken }: { accessToken: string }) {
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const [is3D, setIs3D] = useState(false);
-  const [traffic, setTraffic] = useState<{ map: MapboxMap; placement: OverlayPlacement; loadBuildings: () => Promise<BuildingSource> } | null>(null);
 
   useEffect(() => {
     let map: MapboxMap | undefined;
@@ -48,12 +48,11 @@ export default function MapboxCanvas({ accessToken }: { accessToken: string }) {
 
         mapRef.current = map;
         releaseBoundary = restrictCameraToToronto(map);
-        map.addControl(new mapboxgl.NavigationControl({ visualizePitch: true }), "top-right");
         map.addControl(new mapboxgl.AttributionControl({ compact: false }), "bottom-right");
         map.on("load", () => {
           if (disposed || !map) return;
-          map.addSource("toronto-boundary", { type: "geojson", data: TORONTO_BOUNDARY, attribution: BOUNDARY_ATTRIBUTION, tolerance: 0 });
-          map.addSource("outside-toronto", { type: "geojson", data: OUTSIDE_TORONTO_MASK, tolerance: 0 });
+          map.addSource("outside-toronto", { type: "geojson", data: TORONTO_DISTANT_MASK, attribution: BOUNDARY_ATTRIBUTION, tolerance: 0 });
+          map.addSource("toronto-boundary-fade", { type: "image", url: TORONTO_FADE_IMAGE, coordinates: TORONTO_FADE_COORDINATES });
           map.addLayer({
             id: "outside-toronto-clip",
             type: "clip",
@@ -64,44 +63,15 @@ export default function MapboxCanvas({ accessToken }: { accessToken: string }) {
             id: "outside-toronto-mask",
             type: "fill",
             source: "outside-toronto",
-            paint: { "fill-color": "#dfeef7", "fill-opacity": 1, "fill-emissive-strength": 1 },
+            paint: { "fill-color": TORONTO_MASK_COLOR, "fill-opacity": 1, "fill-emissive-strength": 1, "fill-antialias": false },
           });
           map.addLayer({
-            id: "toronto-city-outline",
-            type: "line",
-            source: "toronto-boundary",
-            paint: { "line-color": "#78a9c8", "line-width": 1.5, "line-opacity": 0.85 },
-          });
-          // Standard's road labels include highway shields that ignore the clip layer, so they are turned off in the
-          // basemap config and street names are drawn here, limited to roads inside Toronto.
-          map.addSource("streets", { type: "vector", url: "mapbox://mapbox.mapbox-streets-v8" });
-          map.addLayer({
-            id: "toronto-road-labels",
-            type: "symbol",
-            source: "streets",
-            "source-layer": "road",
-            slot: "top",
-            minzoom: 12,
-            filter: ["all", ["has", "name"], ["!", ["match", ["get", "class"], ["path", "pedestrian", "service", "track", "major_rail", "minor_rail"], true, false]], ["within", TORONTO_BOUNDARY]],
-            layout: {
-              "symbol-placement": "line",
-              "text-field": ["get", "name"],
-              "text-font": ["DIN Pro Medium", "Arial Unicode MS Regular"],
-              "text-size": ["interpolate", ["linear"], ["zoom"], 12, 10, 16, 13, 18, 15],
-              "text-max-angle": 30,
-              "text-padding": 2,
-            },
-            paint: {
-              "text-color": MAP_PALETTE.roadLabels,
-              "text-halo-color": "#ffffff",
-              "text-halo-width": 1.4,
-              "text-emissive-strength": 1,
-            },
+            id: "toronto-boundary-fade",
+            type: "raster",
+            source: "toronto-boundary-fade",
+            paint: { "raster-fade-duration": 0, "raster-resampling": "linear", "raster-emissive-strength": 1 },
           });
           setReady(true);
-          // Standard's own 3D buildings stay off: the overlay draws buildings so tall ones can turn see-through individually.
-          const buildings = MAPBOX_BUILDINGS(accessToken);
-          setTraffic({ map, placement: { slot: "middle" }, loadBuildings: () => Promise.resolve(buildings) });
           setStatus("");
           setError(null);
         });
@@ -132,7 +102,6 @@ export default function MapboxCanvas({ accessToken }: { accessToken: string }) {
       disposed = true;
       resizeObserver?.disconnect();
       releaseBoundary?.();
-      setTraffic(null);
       map?.remove();
       mapRef.current = null;
     };
@@ -141,6 +110,7 @@ export default function MapboxCanvas({ accessToken }: { accessToken: string }) {
   function changeView(nextIs3D: boolean) {
     const map = mapRef.current;
     if (!map || !ready) return;
+    map.setConfigProperty("basemap", "show3dObjects", nextIs3D);
     map.easeTo({
       pitch: nextIs3D ? 60 : 0,
       bearing: nextIs3D ? -20 : 0,
@@ -153,11 +123,8 @@ export default function MapboxCanvas({ accessToken }: { accessToken: string }) {
   return (
     <main className="map-page" aria-label="Toronto street map with Mapbox Standard">
       <div ref={containerRef} className="map-container" />
-      {traffic ? <TrafficOverlay {...traffic} /> : null}
-      <div className="map-view-toggle" role="group" aria-label="Map view">
-        <button type="button" aria-pressed={!is3D} disabled={!ready} onClick={() => changeView(false)}>2D</button>
-        <button type="button" aria-pressed={is3D} disabled={!ready} onClick={() => changeView(true)}>3D</button>
-      </div>
+      <MapControls map={ready ? mapRef.current : null} is3D={is3D} onViewChange={changeView} />
+      {ready && mapRef.current ? <MapWorkspace map={mapRef.current} renderer="mapbox" /> : null}
       {status ? <p className="map-message" role="status">{status}</p> : null}
       {error ? (
         <div className="map-message map-error" role="alert">
