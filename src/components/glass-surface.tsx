@@ -26,13 +26,13 @@ export default function GlassSurface({ children, variant }: { children: ReactNod
   }, []);
 
   useEffect(() => {
-    if (!allowed || Renderer) return;
+    if (variant === "panel" || !allowed || Renderer) return;
     let disposed = false;
     void import("liquid-glass-react").then((module) => {
       if (!disposed) setRenderer(() => module.default);
     }).catch(() => {});
     return () => { disposed = true; };
-  }, [allowed, Renderer]);
+  }, [allowed, Renderer, variant]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -46,7 +46,10 @@ export default function GlassSurface({ children, variant }: { children: ReactNod
     return () => observer.disconnect();
   }, []);
 
-  const enhanced = allowed && !!Renderer && size.width > 0 && size.height > 0;
+  // The refraction lens re-filters the constantly redrawing map behind it every frame, which costs most on large
+  // panels; panels keep the CSS glass and only small controls get the lens.
+  const lens = variant !== "panel";
+  const enhanced = lens && allowed && !!Renderer && size.width > 0 && size.height > 0;
 
   return (
     <div ref={hostRef} className={`toolbox-glass-shell toolbox-glass-${variant}`} data-enhanced={enhanced}>
@@ -57,11 +60,11 @@ export default function GlassSurface({ children, variant }: { children: ReactNod
             className="toolbox-liquid-lens"
             style={{ position: "absolute", top: "50%", left: "50%", width: size.width, height: size.height }}
             padding="0"
-            cornerRadius={variant === "panel" ? 24 : 17}
-            displacementScale={variant === "panel" ? 42 : 32}
+            cornerRadius={17}
+            displacementScale={32}
             blurAmount={0.125}
             saturation={125}
-            aberrationIntensity={0.8}
+            aberrationIntensity={0}
             elasticity={0}
             globalMousePos={STILL}
             mouseOffset={STILL}

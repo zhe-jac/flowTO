@@ -8,8 +8,7 @@ import type { Map as MapLibreMap } from "maplibre-gl";
 import type { Disruption } from "@/lib/disruptions";
 import type { DisruptionMap } from "@/lib/disruption-map";
 import { advanceClock, initialTrafficClock, type ClockState } from "@/lib/traffic/clock";
-import { simulatorTheme } from "@/lib/simulator-theme";
-import type { SimulatorTheme } from "@/lib/simulator-theme";
+import { simulatorLight, type SimulatorLight } from "@/lib/daylight";
 import { CLASS_WIDTHS, LEVEL_COLORS } from "@/lib/traffic/colors";
 import { closedRoadIds } from "@/lib/traffic/disruptions";
 import { continuousPulseOffset, PULSE_SPACING } from "@/lib/traffic/flow-motion";
@@ -46,7 +45,7 @@ type Props = {
     renderer: "mapbox" | "maplibre";
     items: Disruption[];
     interacting: boolean;
-    onThemeChange: (theme: SimulatorTheme) => void;
+    onLightChange: (light: SimulatorLight) => void;
 };
 function buildFlows(segments: TrafficSegment[]) {
     const flows: Flow[] = [];
@@ -61,7 +60,7 @@ function buildFlows(segments: TrafficSegment[]) {
     });
     return flows;
 }
-export default function TrafficOverlay({ map, renderer, items, interacting, onThemeChange }: Props) {
+export default function TrafficOverlay({ map, renderer, items, interacting, onLightChange }: Props) {
     const [data, setData] = useState<TrafficData | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [retry, setRetry] = useState(0);
@@ -70,8 +69,10 @@ export default function TrafficOverlay({ map, renderer, items, interacting, onTh
     const rerouting = useRerouting(items, snapshot.clock.day, snapshot.clock.minutes);
     const impacts = rerouting.plan?.impacts;
     const impactKey = JSON.stringify(impacts ?? {});
-    const theme = simulatorTheme(snapshot.clock.minutes);
-    useEffect(() => { onThemeChange(theme); }, [theme, onThemeChange]);
+    const light = simulatorLight(snapshot.clock.minutes);
+    const lightKey = `${light.phase}:${light.daylight}`;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- lightKey captures every field of light.
+    useEffect(() => { onLightChange(light); }, [lightKey, onLightChange]);
     const clockRef = useRef(snapshot.clock);
     const selectedRef = useRef<number | null>(null);
     const redrawRef = useRef<() => void>(() => { });

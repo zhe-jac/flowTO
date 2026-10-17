@@ -1,8 +1,8 @@
 import type { Map as MapboxMap } from "mapbox-gl";
 import type { ExpressionSpecification, Map as MapLibreMap } from "maplibre-gl";
-import { mapboxBasemapConfig, MAP_NIGHT_PALETTE, MAP_PALETTE } from "./map-theme";
+import { blendValue, type SimulatorLight } from "./daylight";
+import { mapboxBasemapColors, MAP_NIGHT_PALETTE, MAP_PALETTE } from "./map-theme";
 import { TORONTO_FADE_IMAGE, TORONTO_MASK_COLOR, TORONTO_NIGHT_FADE_IMAGE, TORONTO_NIGHT_MASK_COLOR } from "./city-boundary-presentation";
-import type { SimulatorTheme } from "./simulator-theme";
 
 type ThemeMap = Pick<MapLibreMap, "getStyle" | "getPaintProperty" | "setPaintProperty">;
 type PaintProperty = Parameters<MapLibreMap["getPaintProperty"]>[1];
@@ -46,27 +46,32 @@ export function createMapLibreLighting(map: ThemeMap) {
     }
     if (layer.id === "toronto-3d-buildings") add(layer.id, "fill-extrusion-color", nightBuildings());
   }
-  return (theme: SimulatorTheme) => {
-    for (const change of changes) map.setPaintProperty(change.id, change.property, change[theme]);
+  // Colours blend through dawn and dusk; expressions and other values switch halfway.
+  return (daylight: number) => {
+    for (const change of changes) map.setPaintProperty(change.id, change.property, blendValue(change.night, change.day, daylight) as PaintValue);
   };
 }
 
 export function createMapLighting(map: MapboxMap | MapLibreMap, renderer: "mapbox" | "maplibre") {
   const applyFallback = renderer === "maplibre" ? createMapLibreLighting(map as MapLibreMap) : null;
-  let current: SimulatorTheme | null = null;
-  return (theme: SimulatorTheme) => {
-    if (theme === current) return;
-    current = theme;
+  let current = "";
+  return (light: SimulatorLight) => {
+    const key = `${light.phase}:${light.daylight}`;
+    if (key === current) return;
+    current = key;
+    const { daylight } = light;
     if (renderer === "mapbox") {
+      // Standard switches light presets instantly, so it steps night → dawn → day → dusk while the colours blend.
       const mapbox = map as MapboxMap;
-      const colors = Object.fromEntries(Object.entries(mapboxBasemapConfig(theme)).filter(([property]) => property === "lightPreset" || property.startsWith("color")));
-      mapbox.setConfig("basemap", { ...mapbox.getConfig("basemap"), ...colors });
-    } else applyFallback?.(theme);
-    const night = theme === "night";
+      const current = mapbox.getConfig("basemap") ?? {};
+      const next: Record<string, unknown> = { lightPreset: light.phase, ...mapboxBasemapColors(daylight) };
+      // Only send settings that changed, so each dawn/dusk step re-evaluates as little of the style as possible.
+      if (Object.entries(next).some(([property, value]) => current[property] !== value)) mapbox.setConfig("basemap", { ...current, ...next });
+    } else applyFallback?.(daylight);
     const boundary: BoundaryMap = map;
-    if (boundary.getLayer("outside-toronto-mask")) boundary.setPaintProperty("outside-toronto-mask", "fill-color", night ? TORONTO_NIGHT_MASK_COLOR : TORONTO_MASK_COLOR);
+    if (boundary.getLayer("outside-toronto-mask")) boundary.setPaintProperty("outside-toronto-mask", "fill-color", blendValue(TORONTO_NIGHT_MASK_COLOR, TORONTO_MASK_COLOR, daylight));
     const source = boundary.getSource("toronto-boundary-fade");
-    if (source?.type === "image") source.updateImage?.({ url: night ? TORONTO_NIGHT_FADE_IMAGE : TORONTO_FADE_IMAGE });
-    map.getCanvas().style.backgroundColor = night ? MAP_NIGHT_PALETTE.land : MAP_PALETTE.land;
+    if (source?.type === "image") source.updateImage?.({ url: light.theme === "night" ? TORONTO_NIGHT_FADE_IMAGE : TORONTO_FADE_IMAGE });
+    map.getCanvas().style.backgroundColor = blendValue(MAP_NIGHT_PALETTE.land, MAP_PALETTE.land, daylight);
   };
 }

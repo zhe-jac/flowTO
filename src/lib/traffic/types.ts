@@ -2,11 +2,18 @@ export type DayType = "weekday" | "weekend";
 export type VolumeSource = {
     kind: "midblock";
     label: string;
+    /** Date of the latest count at this location. */
     date: string;
+    /** Counts from different years merged into the estimate. */
+    counts?: number;
+    firstYear?: number;
+    /** Estimate divided by the latest raw count: counts are adjusted to recent (2022+) levels. */
+    adjustment?: number;
 } | {
     kind: "intersection";
     label: string;
     date: string;
+    adjustment?: number;
 } | {
     kind: "street";
     label?: string;
@@ -39,6 +46,8 @@ export type TrafficData = {
             url: string;
         }[];
         licence: string;
+        /** How older counts were scaled to recent levels. */
+        countAdjustment?: { recentFromYear: number; pairedLocations: number; yearFactors: Record<string, number> };
     };
     profiles: Record<DayType, number[]>;
     segments: TrafficSegment[];

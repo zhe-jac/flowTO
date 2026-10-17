@@ -9,12 +9,17 @@ import { createMapLighting, createMapLibreLighting } from "./map-lighting";
 import { MAP_NIGHT_PALETTE, MAP_PALETTE } from "./map-theme";
 import { TORONTO_FADE_IMAGE, TORONTO_NIGHT_FADE_IMAGE } from "./city-boundary-presentation";
 
-test("the simulator uses night from 6 PM through 6 AM and wraps midnight", () => {
-  for (const minute of [0, 359.99, 1080, 1439, 1440, -1]) assert.equal(simulatorTheme(minute), "night");
-  for (const minute of [360, 720, 1079.99, 1800]) assert.equal(simulatorTheme(minute), "day");
-  const clock = { minutes: 1079, day: "weekday" as const, playing: true, rate: CLOCK_RATES[1] };
-  assert.equal(simulatorTheme(advanceClock(clock, 2).minutes), "night");
-  assert.equal(simulatorTheme(advanceClock({ ...clock, playing: false }, 2).minutes), "day");
+const OCTOBER = new Date("2026-10-17T16:30:00Z");
+const NIGHT = { daylight: 0, phase: "night", theme: "night" } as const;
+const DUSK = { daylight: 0.5, phase: "dusk", theme: "day" } as const;
+const DAY = { daylight: 1, phase: "day", theme: "day" } as const;
+
+test("the simulator follows Toronto's sunrise and sunset and wraps midnight", () => {
+  for (const minute of [0, 6 * 60, 20 * 60, 1439, 1440, -1]) assert.equal(simulatorTheme(minute, OCTOBER), "night");
+  for (const minute of [9 * 60, 720, 17 * 60, 1440 + 720]) assert.equal(simulatorTheme(minute, OCTOBER), "day");
+  const clock = { minutes: 19 * 60, day: "weekday" as const, playing: true, rate: CLOCK_RATES[2] };
+  assert.equal(simulatorTheme(advanceClock(clock, 2).minutes, OCTOBER), "night");
+  assert.equal(simulatorTheme(advanceClock({ ...clock, minutes: 12 * 60, playing: false }, 2).minutes, OCTOBER), "day");
 });
 
 test("URL demo time and Toronto wall time initialize the same simulator clock", () => {
@@ -23,14 +28,14 @@ test("URL demo time and Toronto wall time initialize the same simulator clock", 
   assert.equal(demo.minutes, 1395);
   assert.equal(demo.day, "weekday");
   assert.equal(demo.rate.id, "1m");
-  assert.equal(simulatorTheme(demo.minutes), "night");
+  assert.equal(simulatorTheme(demo.minutes, OCTOBER), "night");
   const current = initialTrafficClock("?time=25:99&day=invalid", now);
   assert.equal(current.minutes, 750);
   assert.equal(current.day, "weekend");
   assert.equal(current.rate.id, "live");
 });
 
-test("Mapbox switches lighting only at theme changes and preserves 3D settings", () => {
+test("Mapbox steps light presets, blends colours and preserves 3D settings", () => {
   let config: Record<string, unknown> = { show3dObjects: true, showPointOfInterestLabels: false };
   const changes: Record<string, unknown>[] = [];
   const images: string[] = [];
@@ -43,19 +48,23 @@ test("Mapbox switches lighting only at theme changes and preserves 3D settings",
     getCanvas: () => ({ style: {} }),
   } as unknown as MapboxMap;
   const apply = createMapLighting(map, "mapbox");
-  apply("night");
-  apply("night");
+  apply(NIGHT);
+  apply(NIGHT);
   assert.equal(changes.length, 1);
   assert.equal(config.lightPreset, "night");
   assert.equal(config.colorLand, MAP_NIGHT_PALETTE.land);
   assert.equal(config.show3dObjects, true);
   assert.equal(config.showPointOfInterestLabels, false);
-  apply("day");
-  assert.equal(changes.length, 2);
+  apply(DUSK);
+  assert.equal(config.lightPreset, "dusk");
+  assert.notEqual(config.colorLand, MAP_PALETTE.land);
+  assert.notEqual(config.colorLand, MAP_NIGHT_PALETTE.land);
+  apply(DAY);
+  assert.equal(changes.length, 3);
   assert.equal(config.lightPreset, "day");
   assert.equal(config.colorLand, MAP_PALETTE.land);
   assert.equal(config.show3dObjects, true);
-  assert.deepEqual(images, [TORONTO_NIGHT_FADE_IMAGE, TORONTO_FADE_IMAGE]);
+  assert.deepEqual(images, [TORONTO_NIGHT_FADE_IMAGE, TORONTO_FADE_IMAGE, TORONTO_FADE_IMAGE]);
 });
 
 test("MapLibre restores original expressions and leaves traffic and disruption colours intact", () => {
@@ -75,11 +84,13 @@ test("MapLibre restores original expressions and leaves traffic and disruption c
     setPaintProperty: (id: string, property: string, value: unknown) => { paint.set(`${id}:${property}`, value); touched.push(id); },
   } as unknown as MapLibreMap;
   const apply = createMapLibreLighting(map);
-  apply("night");
+  apply(0);
   assert.equal(paint.get("background:background-color"), MAP_NIGHT_PALETTE.land);
   assert.equal(paint.get("label:text-color"), MAP_NIGHT_PALETTE.roadLabels);
   assert.ok(!touched.some((id) => /^(traffic|disruption)/.test(id)));
-  apply("day");
+  apply(0.5);
+  assert.match(String(paint.get("background:background-color")), /^rgba\(/);
+  apply(1);
   for (const [key, value] of original) assert.deepEqual(paint.get(key), value);
   assert.equal(paint.get("label:text-halo-color"), undefined);
 });

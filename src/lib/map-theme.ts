@@ -1,3 +1,5 @@
+import { blendValue } from "./daylight";
+
 export const MAP_PALETTE = {
   land: "#edf5fa",
   water: "#8bc8ed",
@@ -60,6 +62,14 @@ export const MAPBOX_BASEMAP_CONFIG = {
   colorEducation: MAP_PALETTE.education,
   colorIndustrial: MAP_PALETTE.industrial,
 };
+
+/** Standard colour settings blended between the night (0) and day (1) palettes. */
+export function mapboxBasemapColors(daylight: number) {
+  return Object.fromEntries(Object.entries(MAP_PALETTE).map(([name, day]) => {
+    const night = MAP_NIGHT_PALETTE[name as keyof typeof MAP_PALETTE];
+    return [`color${name[0].toUpperCase()}${name.slice(1)}`, blendValue(night, day, daylight)];
+  }));
+}
 
 export function mapboxBasemapConfig(theme: "day" | "night") {
   const palette = theme === "night" ? MAP_NIGHT_PALETTE : MAP_PALETTE;

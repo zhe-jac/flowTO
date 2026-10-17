@@ -2,6 +2,14 @@
   box-sizing: border-box;
 }
 
+/* Registered as colours so the glass theme fades through dawn and dusk instead of flipping. */
+@property --ui-ink { syntax: "<color>"; inherits: true; initial-value: #25465d; }
+@property --ui-muted { syntax: "<color>"; inherits: true; initial-value: #365268; }
+@property --ui-accent { syntax: "<color>"; inherits: true; initial-value: #1d5378; }
+@property --glass-tint { syntax: "<color>"; inherits: true; initial-value: rgb(239 248 255 / 94%); }
+@property --glass-panel-tint { syntax: "<color>"; inherits: true; initial-value: rgb(242 249 255 / 96%); }
+@property --glass-border { syntax: "<color>"; inherits: true; initial-value: rgb(255 255 255 / 86%); }
+
 :root {
   color-scheme: light;
   --ui-ink: #25465d;
@@ -13,6 +21,13 @@
   --glass-blur: 10px;
   --glass-shadow: 0 8px 28px rgb(38 78 105 / 12%), 0 2px 5px rgb(38 78 105 / 5%), inset 0 1px 0 rgb(255 255 255 / 95%), inset 0 -1px 0 rgb(94 152 187 / 14%);
   --glass-inner: inset 0 1px 0 rgb(255 255 255 / 90%), inset 0 -1px 0 rgb(73 121 154 / 10%);
+  transition: --ui-ink 2.5s ease, --ui-muted 2.5s ease, --ui-accent 2.5s ease, --glass-tint 2.5s ease, --glass-panel-tint 2.5s ease, --glass-border 2.5s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    transition: none;
+  }
 }
 
 html,

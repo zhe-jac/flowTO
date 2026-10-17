@@ -3,6 +3,7 @@ import type { FeatureCollection, MultiLineString } from "geojson";
 import { isPointInToronto, TORONTO_BOUNDS } from "../src/lib/city-boundary";
 import { CLASS_ASSUMPTIONS, type DayType, type TrafficData, type TrafficSegment, type VolumeSource } from "../src/lib/traffic/types";
 import { prepareTrafficCoordinates } from "../src/lib/traffic/geometry";
+import { factorFor, mergeCounts, RECENT_FROM_YEAR, yearFactors, type HistoricalCount } from "../src/lib/traffic/count-history";
 const bounds = process.env.MAP_BOUNDS ? process.env.MAP_BOUNDS.split(",").map(Number) : TORONTO_BOUNDS.flat();
 if (bounds.length !== 4 || bounds.some((value) => !Number.isFinite(value)))
     throw new Error("MAP_BOUNDS must be west,south,east,north");
@@ -18,6 +19,10 @@ const sources = {
     midblock: {
         path: "data/raw/svc_most_recent_summary.csv",
         url: "https://ckan0.cf.opendata.inter.prod-toronto.ca/dataset/7a0ac637-43da-4e42-a79c-6d8279e21d85/resource/68c727f5-fd14-46e1-9023-1cd002ab7294/download/svc_most_recent_summary_data.csv",
+    },
+    midblockHistory: {
+        path: "data/raw/svc_summary_all.csv",
+        url: "https://ckan0.cf.opendata.inter.prod-toronto.ca/dataset/7a0ac637-43da-4e42-a79c-6d8279e21d85/resource/af1ccce4-d978-4a6d-9dc3-3fb33b1cc349/download/svc_summary_data.csv",
     },
     midblockRaw: {
         path: "data/raw/svc_raw_volume_2020_2024.csv",
@@ -194,6 +199,20 @@ for (const feature of centreline.features) {
         });
     }
 }
+// Every midblock count the City has published, so a location's counts from different years can be merged.
+const history = new Map<string, HistoricalCount[]>();
+for (const row of parseCsv(await cached(sources.midblockHistory))) {
+    const weekday = Number(row.avg_weekday_daily_vol) || Number(row.avg_daily_vol);
+    const year = Number(row.count_date_start?.slice(0, 4));
+    if (!(weekday > 0) || !(year > 1980))
+        continue;
+    if (classById.get(row.centreline_id) === "Expressway" && weekday < MIN_EXPRESSWAY_DAILY)
+        continue;
+    if (!history.has(row.centreline_id))
+        history.set(row.centreline_id, []);
+    history.get(row.centreline_id)!.push({ year, weekday, weekend: Number(row.avg_weekend_daily_vol) || undefined });
+}
+const factors = yearFactors(history);
 const midblock = new Map<string, Record<string, string>>();
 const weekendRatios = new Map<string, number[]>();
 const classDaily = new Map<string, number[]>();
@@ -209,7 +228,7 @@ for (const row of parseCsv(midblockText)) {
     midblock.set(row.centreline_id, row);
     if (!classDaily.has(cls))
         classDaily.set(cls, []);
-    classDaily.get(cls)!.push(weekday);
+    classDaily.get(cls)!.push(mergeCounts(history.get(row.centreline_id) ?? [], factors)?.weekday ?? weekday * factorFor(Number(row.latest_count_date_start.slice(0, 4)), factors));
     const weekend = Number(row.avg_weekend_daily_vol);
     if (weekend > 0) {
         if (!weekendRatios.has(cls))
@@ -234,17 +253,28 @@ const measuredDaily = new Map<RawSegment, number>();
 for (const segment of segments) {
     const count = midblock.get(segment.key);
     if (count) {
-        const weekday = Number(count.avg_weekday_daily_vol) || Number(count.avg_daily_vol);
-        const weekend = Number(count.avg_weekend_daily_vol);
+        const latestYear = Number(count.latest_count_date_start.slice(0, 4));
+        const merged = mergeCounts(history.get(segment.key) ?? [], factors);
+        const fallbackFactor = factorFor(latestYear, factors);
+        const weekday = merged?.weekday ?? (Number(count.avg_weekday_daily_vol) || Number(count.avg_daily_vol)) * fallbackFactor;
+        const weekend = merged ? merged.weekend : (Number(count.avg_weekend_daily_vol) || 0) * fallbackFactor;
         segment.weekdayDaily = weekday;
-        segment.weekendDaily = weekend > 0 ? weekend : weekday * weekendRatio(segment.cls);
-        segment.source = { kind: "midblock", label: count.location_name, date: count.latest_count_date_start };
+        segment.weekendDaily = weekend && weekend > 0 ? weekend : weekday * weekendRatio(segment.cls);
+        segment.source = {
+            kind: "midblock",
+            label: count.location_name,
+            date: count.latest_count_date_start,
+            counts: merged?.counts ?? 1,
+            firstYear: merged?.firstYear ?? latestYear,
+            adjustment: Number((merged?.adjustment ?? fallbackFactor).toFixed(3)),
+        };
         measuredDaily.set(segment, weekday);
         continue;
     }
     const estimates: {
         daily: number;
         row: Record<string, string>;
+        factor: number;
     }[] = [];
     for (const end of segment.cls === "Expressway" ? [] : (["from", "to"] as const)) {
         const row = intersection.get(segment[end]);
@@ -261,13 +291,14 @@ for (const segment of segments) {
         if (!flowsIntoIntersection)
             continue;
         const coverage = row.count_duration === "14" ? coverage14 : coverage8;
-        estimates.push({ daily: (approach / coverage) * (segment.oneway === 0 ? 2 : 1), row });
+        const factor = factorFor(Number(row.latest_count_date.slice(0, 4)), factors);
+        estimates.push({ daily: (approach / coverage) * (segment.oneway === 0 ? 2 : 1) * factor, row, factor });
     }
     if (estimates.length) {
         const daily = estimates.reduce((sum, item) => sum + item.daily, 0) / estimates.length;
         segment.weekdayDaily = daily;
         segment.weekendDaily = daily * weekendRatio(segment.cls);
-        segment.source = { kind: "intersection", label: estimates[0].row.location_name, date: estimates[0].row.latest_count_date };
+        segment.source = { kind: "intersection", label: estimates[0].row.location_name, date: estimates[0].row.latest_count_date, adjustment: Number(estimates[0].factor.toFixed(3)) };
         measuredDaily.set(segment, daily);
     }
 }
@@ -352,6 +383,11 @@ const output: TrafficData = {
             { name: "Traffic Volumes – Multimodal Intersection Turning Movement Counts", url: "https://open.toronto.ca/dataset/traffic-volumes-at-intersections-for-all-modes/" },
         ],
         licence: "Contains information licensed under the Open Government Licence – Toronto.",
+        countAdjustment: {
+            recentFromYear: RECENT_FROM_YEAR,
+            pairedLocations: [...history.values()].filter((list) => list.some((count) => count.year >= RECENT_FROM_YEAR) && list.some((count) => count.year < RECENT_FROM_YEAR)).length,
+            yearFactors: Object.fromEntries([...factors].map(([year, factor]) => [String(year), Number(factor.toFixed(3))])),
+        },
     },
     profiles,
     segments: segments.map(({ from: _from, to: _to, key: _key, ...segment }) => ({
