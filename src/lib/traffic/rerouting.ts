@@ -5,7 +5,7 @@ import { CLASS_ASSUMPTIONS, type DayType, type TrafficData, type TrafficSegment 
 export type Impact = { addedHourly: number; retained: number; capacityScale: number };
 export type RouteOption = { id: string; roads: string[]; minutes: number };
 export type Choice = { id: string; weights: number[]; eventVehicles: number };
-export type ReroutingPlan = { impacts: Record<string, Impact>; source: "gemini" | "local"; summary: string; warning?: string };
+export type ReroutingPlan = { impacts: Record<string, Impact>; perDisruption?: Record<string, Record<string, Impact>>; source: "solver" | "gemini" | "local"; summary: string; warning?: string; elapsedMs?: number };
 type Scenario = { item: Disruption; routes: RouteOption[]; demand: number; retained: number };
 const node = (p: number[]) => `${p[0].toFixed(5)},${p[1].toFixed(5)}`;
 const distance = (a: number[], b: number[]) => Math.hypot((a[0] - b[0]) * 80000, (a[1] - b[1]) * 111000);

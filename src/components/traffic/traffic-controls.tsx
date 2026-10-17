@@ -1,9 +1,8 @@
 "use client";
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { CLOCK_RATES, torontoNow, type ClockState } from "@/lib/traffic/clock";
 import { formatClock, MINUTES_PER_DAY } from "@/lib/traffic/model";
 import type { DayType } from "@/lib/traffic/types";
-import { AnimatePresence, motion, type Transition } from "motion/react";
 import GlassSurface from "../glass-surface";
 import SlidingControl from "../sliding-control";
 const TICKS = [0, 360, 720, 1080, 1440];
@@ -21,28 +20,45 @@ type Props = {
     scenario?: { text: string; retry?: () => void; compare: "before" | "after"; onCompare: (mode: "before" | "after") => void } | null;
     onChange: (change: Partial<ClockState>) => void;
 };
-const PANEL_SPRING: Transition = { type: "spring", stiffness: 260, damping: 25 };
-const FADE = { initial: { opacity: 0 }, animate: { opacity: 1, transition: { duration: 0.2, delay: 0.08 } }, exit: { opacity: 0, transition: { duration: 0.1 } } };
-const MINIMIZED_KEY = "toronto-sandbox:controls-minimized";
-
 export default function TrafficControls({ clock, profile, vehicles, closures, scenario, onChange }: Props) {
     const [scrubbing, setScrubbing] = useState(false);
-    const [minimized, setMinimized] = useState(() => { try { return localStorage.getItem(MINIMIZED_KEY) === "1"; } catch { return false; } });
-    const toggleMinimized = () => setMinimized((value) => {
-        try { localStorage.setItem(MINIMIZED_KEY, value ? "0" : "1"); } catch { /* storage unavailable */ }
-        return !value;
-    });
+    const [minimized, setMinimized] = useState(false);
+    const shellRef = useRef<HTMLDivElement>(null);
+    const previousSize = useRef<{ width: number; height: number } | null>(null);
+    const resizeAnimation = useRef<Animation | null>(null);
+    const toggleMinimized = () => {
+        const rect = shellRef.current?.getBoundingClientRect();
+        previousSize.current = rect ? { width: rect.width, height: rect.height } : null;
+        resizeAnimation.current?.cancel();
+        setMinimized(value => !value);
+    };
+    useLayoutEffect(() => {
+        const shell = shellRef.current;
+        const before = previousSize.current;
+        previousSize.current = null;
+        if (!shell || !before || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+        const after = shell.getBoundingClientRect();
+        resizeAnimation.current = shell.animate([
+            { width: `${before.width}px`, height: `${before.height}px` },
+            { width: `${after.width}px`, height: `${after.height}px` },
+        ], { duration: 450, easing: "cubic-bezier(0.22, 1, 0.36, 1)" });
+        if (!minimized) {
+            shell.querySelectorAll(".traffic-segmented, .traffic-estimate, .traffic-timeline, .traffic-clock span").forEach(element => {
+                element.animate([{ opacity: 0, transform: "translateY(6px)" }, { opacity: 1, transform: "translateY(0)" }], { duration: 300, delay: 100, fill: "backwards", easing: "ease-out" });
+            });
+        }
+    }, [minimized]);
     const live = clock.rate.id === "live";
     const chooseRate = (id: string) => {
         const rate = CLOCK_RATES.find((item) => item.id === id) ?? CLOCK_RATES[1];
         onChange(rate.id === "live" ? { rate, playing: true, ...torontoNow() } : { rate, playing: true });
     };
     const chooseDay = (day: DayType) => onChange({ day, rate: live ? CLOCK_RATES[1] : clock.rate });
-    const minimizeButton = <button type="button" className="traffic-minimize" aria-label={minimized ? "Expand traffic playback" : "Minimize traffic playback"} aria-expanded={!minimized} onClick={toggleMinimized}>
-        <svg viewBox="0 0 16 16" aria-hidden="true"><path d={minimized ? "M3.5 10l4.5-4.5 4.5 4.5" : "M3.5 6l4.5 4.5 4.5-4.5"} /></svg>
-      </button>;
-    return (<div className="traffic-controls-shell" data-map-ui data-minimized={minimized}><GlassSurface variant="panel"><motion.section layout transition={PANEL_SPRING} style={{ borderRadius: 24 }} className="traffic-controls" aria-label="Typical traffic playback">
-      <motion.div layout="position" className="traffic-controls-row">
+    return (<div ref={shellRef} className="traffic-controls-shell" data-map-ui data-minimized={minimized}><GlassSurface variant="panel"><section className="traffic-controls" aria-label="Typical traffic playback">
+      <button type="button" className="traffic-minimize" aria-expanded={!minimized} aria-label={minimized ? "Expand traffic controls" : "Minimize traffic controls"} title={minimized ? "Expand traffic controls" : "Minimize traffic controls"} onClick={toggleMinimized}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={minimized ? "m6 15 6-6 6 6" : "m6 9 6 6 6-6"} /></svg>
+      </button>
+      <div className="traffic-controls-row">
         <button type="button" className="traffic-play" aria-label={clock.playing ? "Pause traffic playback" : "Play traffic playback"} onClick={() => onChange({ playing: !clock.playing })}>
           {clock.playing ? (<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="2" width="3.5" height="12" rx="1"/><rect x="9.5" y="2" width="3.5" height="12" rx="1"/></svg>) : (<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.2v11.6a.7.7 0 0 0 1.06.6l9.3-5.8a.7.7 0 0 0 0-1.2l-9.3-5.8A.7.7 0 0 0 4 2.2z"/></svg>)}
         </button>
@@ -52,8 +68,6 @@ export default function TrafficControls({ clock, profile, vehicles, closures, sc
             Typical {clock.day} · {live ? "current Toronto time" : "playback"}
           </span>
         </div>
-        <AnimatePresence initial={false} mode="popLayout">
-        {minimized ? null : <motion.div key="options" className="traffic-controls-options" {...FADE}>
         <SlidingControl className="traffic-segmented" label="Day type" value={clock.day}>
           {(["weekday", "weekend"] as const).map((day) => (<button key={day} type="button" aria-pressed={clock.day === day} onClick={() => chooseDay(day)}>
               {day === "weekday" ? "Weekday" : "Weekend"}
@@ -64,15 +78,10 @@ export default function TrafficControls({ clock, profile, vehicles, closures, sc
               {rate.label}
             </button>))}
         </SlidingControl>
-        </motion.div>}
-        </AnimatePresence>
-        {minimizeButton}
-      </motion.div>
-      <AnimatePresence initial={false}>
-      {minimized ? null : <motion.div key="details" layout="position" className="traffic-controls-details" {...FADE}>
-      {scenario ? <div className="traffic-segmented traffic-compare" role="group" aria-label="Compare with normal traffic">
+      </div>
+      {scenario ? <SlidingControl className="traffic-segmented traffic-compare" label="Compare with normal traffic" value={scenario.compare}>
         {(["before", "after"] as const).map((mode) => <button key={mode} type="button" aria-pressed={scenario.compare === mode} onClick={() => scenario.onCompare(mode)}>{mode === "before" ? "Before" : "After"}</button>)}
-      </div> : null}
+      </SlidingControl> : null}
       <p className="traffic-estimate">Estimated traffic · ≈ {Math.round(vehicles).toLocaleString()} vehicles on roads{closures ? ` · ${closures} full ${closures === 1 ? "closure" : "closures"} applied` : ""}{scenario ? <> · {scenario.text}{scenario.retry ? <> <button type="button" className="traffic-estimate-retry" onClick={scenario.retry}>Retry</button></> : null}</> : null}</p>
       <div className="traffic-timeline" data-scrubbing={scrubbing}>
         <div className="traffic-time-indicator-track" aria-hidden="true"><span className="traffic-time-indicator" style={{ left: `${Math.floor(clock.minutes) / (MINUTES_PER_DAY - 1) * 100}%` }} /></div>
@@ -84,7 +93,5 @@ export default function TrafficControls({ clock, profile, vehicles, closures, sc
           {TICKS.map((minute) => <span key={minute}>{minute === 1440 ? "12 AM" : formatClock(minute).replace(":00", "")}</span>)}
         </div>
       </div>
-      </motion.div>}
-      </AnimatePresence>
-    </motion.section></GlassSurface></div>);
+    </section></GlassSurface></div>);
 }
