@@ -52,3 +52,12 @@ test("lane reductions reduce capacity and events add traffic on approach routes"
   const choices = [{ id: "event", weights: scenarios[0].routes.map(() => 1), eventVehicles: 20000 }];
   assert.throws(() => validateChoices(choices, scenarios));
 });
+
+test("another disruption can use a lane-reduced street, but never a fully closed one", () => {
+  const reduction: Disruption = { ...closure, id: "reduced", roadId: "across", restriction: "lane-reduction" };
+  const partial = scenariosFor(data, [closure, reduction], "weekday", 480);
+  const detour = partial.find(s => s.item.id === "closure:0")!;
+  assert.deepEqual(detour.routes[0].roads, ["north", "across", "south"]);
+  const full = scenariosFor(data, [closure, { ...reduction, restriction: "full-closure" }], "weekday", 480);
+  assert.equal(full.find(s => s.item.id === "closure:0")!.routes.length, 0);
+});

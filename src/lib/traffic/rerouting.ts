@@ -10,14 +10,46 @@ type Scenario = { item: Disruption; routes: RouteOption[]; demand: number; retai
 const node = (p: number[]) => `${p[0].toFixed(5)},${p[1].toFixed(5)}`;
 const distance = (a: number[], b: number[]) => Math.hypot((a[0] - b[0]) * 80000, (a[1] - b[1]) * 111000);
 
-/** Directed endpoint graph. Only connected, legal routes can be offered to Gemini. */
+class RouteQueue {
+  entries: { node: string; cost: number }[] = [];
+  push(entry: { node: string; cost: number }) {
+    let i = this.entries.length;
+    this.entries.push(entry);
+    while (i > 0) {
+      const parent = (i - 1) >> 1;
+      if (this.entries[parent].cost <= entry.cost) break;
+      this.entries[i] = this.entries[parent]; i = parent;
+    }
+    this.entries[i] = entry;
+  }
+  pop() {
+    const first = this.entries[0], last = this.entries.pop()!;
+    if (this.entries.length) {
+      let i = 0;
+      while (i * 2 + 1 < this.entries.length) {
+        let child = i * 2 + 1;
+        if (child + 1 < this.entries.length && this.entries[child + 1].cost < this.entries[child].cost) child++;
+        if (this.entries[child].cost >= last.cost) break;
+        this.entries[i] = this.entries[child]; i = child;
+      }
+      this.entries[i] = last;
+    }
+    return first;
+  }
+}
+
+/** Directed endpoint graph with legal connections and reduced-capacity streets. */
 export function scenariosFor(data: TrafficData, items: Disruption[], day: DayType, minutes: number): Scenario[] {
-  const blocked = new Set(items.flatMap(i => i.kind !== "event" ? [i.roadId] : []));
+  const blocked = new Set(items.flatMap(i => i.kind !== "event" && i.restriction === "full-closure" ? [i.roadId] : []));
+  const reduced = new Set(items.flatMap(i => i.kind !== "event" && i.restriction === "lane-reduction" ? [i.roadId] : []));
   const graph = new Map<string, { to: string; road: TrafficSegment; cost: number }[]>();
+  const destinations = new Set<string>();
   const share = profileShare(data.profiles[day], minutes);
   const add = (from: string, to: string, road: TrafficSegment) => {
     const edges = graph.get(from) ?? [];
-    edges.push({ to, road, cost: road.lengthM / 1000 / directionState(road, share, day).speedKmh * 60 });
+    const state = impactedState(road, share, day, reduced.has(road.id) ? { addedHourly: 0, retained: 0.55, capacityScale: 0.5 } : undefined);
+    edges.push({ to, road, cost: road.lengthM / 1000 / state.speedKmh * 60 });
+    destinations.add(to);
     graph.set(from, edges);
   };
   for (const road of data.segments) {
@@ -27,27 +59,32 @@ export function scenariosFor(data: TrafficData, items: Disruption[], day: DayTyp
     if (road.oneway !== 1) add(b, a, road);
   }
   // Local bounded Dijkstra; repeated with penalties to offer distinct alternatives.
-  function routes(from: string, to: string): RouteOption[] {
+  function routes(from: string, to: string, avoid?: string, surfaceOnly = false): RouteOption[] {
+    if (from === to) return [];
     const result: RouteOption[] = [];
     const penalties = new Map<string, number>();
     for (let attempt = 0; attempt < 3; attempt++) {
       const costs = new Map([[from, 0]]), previous = new Map<string, { from: string; road: string; cost: number }>();
-      const queue = new Set([from]);
+      const queue = new RouteQueue();
+      queue.push({ node: from, cost: 0 });
+      let reached = false;
       let visited = 0;
-      while (queue.size && visited++ < 2500) {
-        let current = "", best = Infinity;
-        for (const key of queue) if (costs.get(key)! < best) { current = key; best = costs.get(key)!; }
-        queue.delete(current);
-        if (current === to) break;
+      while (queue.entries.length && visited < 10000) {
+        const { node: current, cost: best } = queue.pop();
+        if (best !== costs.get(current)) continue;
+        visited++;
+        if (current === to) { reached = true; break; }
         if (best > 30) continue;
         for (const edge of graph.get(current) ?? []) {
+          if (edge.road.id === avoid) continue;
+          if (surfaceOnly && /Expressway|Ramp/i.test(`${edge.road.cls} ${edge.road.name}`)) continue;
           const cost = best + edge.cost * (penalties.get(edge.road.id) ?? 1);
           if (cost < (costs.get(edge.to) ?? Infinity)) {
-            costs.set(edge.to, cost); previous.set(edge.to, { from: current, road: edge.road.id, cost: edge.cost }); queue.add(edge.to);
+            costs.set(edge.to, cost); previous.set(edge.to, { from: current, road: edge.road.id, cost: edge.cost }); queue.push({ node: edge.to, cost });
           }
         }
       }
-      if (!previous.has(to)) break;
+      if (!reached || !previous.has(to)) break;
       const roads: string[] = []; let cursor = to, travel = 0;
       while (cursor !== from) { const step = previous.get(cursor)!; roads.unshift(step.road); travel += step.cost; cursor = step.from; }
       if (!result.some(r => r.roads.join() === roads.join())) result.push({ id: String(result.length), roads, minutes: travel });
@@ -57,11 +94,31 @@ export function scenariosFor(data: TrafficData, items: Disruption[], day: DayTyp
   }
   return items.flatMap<Scenario>(item => {
     if (item.kind === "event") {
-      const nearby = data.segments.filter(s => !blocked.has(s.id) && distance(s.coords[0], item.position) < 1500);
-      const venue = [...nearby].sort((a, b) => distance(a.coords[0], item.position) - distance(b.coords[0], item.position))[0];
-      if (!venue) return [{ item, routes: [], demand: 0, retained: 1 }];
-      const approaches = [...nearby].sort((a, b) => b.weekdayDaily - a.weekdayDaily).filter((s, i, all) => all.findIndex(t => t.name === s.name) === i).slice(0, 4);
-      const options = approaches.flatMap(s => routes(node(s.coords[0]), node(venue.coords[0])).slice(0, 1));
+      // Venue access is a surface-road endpoint that vehicles can legally enter.
+      // Sample surrounding surface approaches instead of choosing only the
+      // largest traffic counts (which over-selected nearby expressways).
+      const nearby = data.segments.filter(s => !blocked.has(s.id) && !/Expressway|Ramp/i.test(`${s.cls} ${s.name}`) && Math.min(distance(s.coords[0], item.position), distance(s.coords.at(-1)!, item.position)) < 1500);
+      const access = nearby.flatMap(s => [s.coords[0], s.coords.at(-1)!]).filter(p => destinations.has(node(p))).sort((a, b) => distance(a, item.position) - distance(b, item.position))[0];
+      if (!access) return [{ item, routes: [], demand: 0, retained: 1 }];
+      const candidates = nearby.map(s => {
+        const first = s.coords[0], last = s.coords.at(-1)!;
+        const origin = s.oneway === 1 ? first : s.oneway === -1 ? last : distance(first, access) > distance(last, access) ? first : last;
+        const d = distance(origin, item.position);
+        const volume = day === "weekday" ? s.weekdayDaily : s.weekendDaily;
+        const sector = Math.floor((Math.atan2((origin[1] - item.position[1]) * 111000, (origin[0] - item.position[0]) * 80000) + Math.PI) / (Math.PI / 2)) % 4;
+        return { s, origin, d, sector, score: Math.log1p(volume) / (500 + Math.abs(d - 800)) };
+      }).filter(c => c.d >= 300 && c.d <= 1800 && node(c.origin) !== node(access)).sort((a, b) => b.score - a.score);
+      const selected: typeof candidates = [];
+      const names = new Set<string>(), sectors = new Set<number>();
+      for (const candidate of candidates) {
+        if (names.has(candidate.s.name) || sectors.has(candidate.sector)) continue;
+        selected.push(candidate); names.add(candidate.s.name); sectors.add(candidate.sector);
+      }
+      for (const candidate of candidates) {
+        if (selected.length >= 4) break;
+        if (!names.has(candidate.s.name)) { selected.push(candidate); names.add(candidate.s.name); }
+      }
+      const options = selected.flatMap(c => routes(node(c.origin), node(access), undefined, true).slice(0, 1));
       return [{ item, routes: options.map((r, i) => ({ ...r, id: String(i) })), demand: Math.min(10000, (item.attendance ?? 1000) * 0.3), retained: 1 }];
     }
     const road = data.segments.find(s => s.id === item.roadId);
@@ -70,7 +127,7 @@ export function scenariosFor(data: TrafficData, items: Disruption[], day: DayTyp
     const state = directionState(road, share, day);
     const first = node(road.coords[0]), last = node(road.coords.at(-1)!);
     const pairs = road.oneway === 0 ? [[first, last], [last, first]] : [road.oneway === 1 ? [first, last] : [last, first]];
-    return pairs.map(([from, to], index) => ({ item: { ...item, id: `${item.id}:${index}` }, routes: routes(from, to), demand: state.flow * (1 - retained), retained }));
+    return pairs.map(([from, to], index) => ({ item: { ...item, id: `${item.id}:${index}` }, routes: routes(from, to, road.id), demand: state.flow * (1 - retained), retained }));
   });
 }
 
