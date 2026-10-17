@@ -7,7 +7,6 @@ export type RoadSection = { roadId: string; from: number; to: number };
 export const MAX_EXTENT_SECTIONS = 24;
 export const MIN_EXTENT_METRES = 5;
 const MAX_EXTENT_METRES = 3000;
-const key = (point: number[]) => `${point[0].toFixed(5)},${point[1].toFixed(5)}`;
 const coordinate = (point: number[]): Coordinate => [point[0], point[1]];
 
 export function roadDistance(a: number[], b: number[]) {
@@ -19,8 +18,7 @@ export function roadLength(points: number[][]) {
   return points.slice(1).reduce((total, point, index) => total + roadDistance(points[index], point), 0);
 }
 
-
-export function pointOnRoad(road: Road, fraction: number): Coordinate {
+export function pointOnRoad(road: Pick<Road, "geometry">, fraction: number): Coordinate {
   const points = road.geometry.coordinates;
   const target = Math.max(0, Math.min(1, fraction)) * roadLength(points);
   let travelled = 0;
@@ -75,6 +73,22 @@ export function extentAnchors(item: RoadDisruption): [RoadAnchor, RoadAnchor] {
   return [{ roadId: sections[0].roadId, fraction: sections[0].from }, { roadId: sections.at(-1)!.roadId, fraction: sections.at(-1)!.to }];
 }
 
+export function validRoadExtent(item: RoadDisruption, coordinates: (id: string) => number[][] | undefined) {
+  if (!item.roadSections) return !!coordinates(item.roadId);
+  let previous: Coordinate | null = null;
+  let length = 0;
+  for (const section of item.roadSections) {
+    const points = coordinates(section.roadId);
+    if (!points || points.length < 2) return false;
+    const road = { geometry: { type: "LineString" as const, coordinates: points } };
+    const start = pointOnRoad(road, section.from);
+    if (previous && roadDistance(previous, start) > 2) return false;
+    previous = pointOnRoad(road, section.to);
+    length += roadLength(points) * Math.abs(section.to - section.from);
+  }
+  return length >= MIN_EXTENT_METRES && length <= MAX_EXTENT_METRES;
+}
+
 export function applyRoadSections(item: RoadDisruption, sections: RoadSection[], roads: ReadonlyMap<string, Road>): RoadDisruption {
   const lengths = sections.map(section => roadLength(roads.get(section.roadId)!.geometry.coordinates) * Math.abs(section.to - section.from));
   let remaining = lengths.reduce((sum, length) => sum + length, 0) / 2;
@@ -89,92 +103,42 @@ export function applyRoadSections(item: RoadDisruption, sections: RoadSection[],
   return item;
 }
 
-export function createRoadExtentNetwork(roads: ReadonlyMap<string, Road>) {
-  type Edge = { node: string; section: RoadSection; length: number };
-  const graph = new Map<string, Edge[]>();
-  const lengths = new Map<string, number>();
-  const add = (from: string, edge: Edge) => {
-    const edges = graph.get(from) ?? [];
-    edges.push(edge);
-    graph.set(from, edges);
-  };
-  for (const road of roads.values()) {
-    const points = road.geometry.coordinates;
-    const id = road.properties.id;
-    const length = roadLength(points);
-    if (!length) continue;
-    lengths.set(id, length);
-    add(key(points[0]), { node: key(points.at(-1)!), section: { roadId: id, from: 0, to: 1 }, length });
-    add(key(points.at(-1)!), { node: key(points[0]), section: { roadId: id, from: 1, to: 0 }, length });
+export function traceRoadExtent(sections: RoadSection[], target: RoadAnchor, endpoint: number, roads: ReadonlyMap<string, Road>): RoadSection[] | null {
+  if (!sections.length || !Number.isFinite(target.fraction) || target.fraction < 0 || target.fraction > 1) return null;
+  const road = roads.get(target.roadId);
+  if (!road) return null;
+  const reversed = endpoint === 0;
+  const path = reversed ? [...sections].reverse().map(section => ({ roadId: section.roadId, from: section.to, to: section.from })) : sections.map(section => ({ ...section }));
+  const existing = path.findIndex(section => section.roadId === target.roadId);
+  let next: RoadSection[];
+  if (existing >= 0) {
+    next = path.slice(0, existing + 1);
+    next[existing] = { ...next[existing], to: target.fraction };
+    if (next[existing].from === next[existing].to) next.pop();
+  } else {
+    const last = path.at(-1)!;
+    const previousRoad = roads.get(last.roadId);
+    if (!previousRoad) return null;
+    const exit = last.to > last.from ? 1 : 0;
+    const atIntersection = last.to === 0 || last.to === 1;
+    const fromIntersection = last.from === 0 || last.from === 1;
+    const entryPosition = pointOnRoad(previousRoad, last.from);
+    const branchJoins = !atIntersection && fromIntersection ? [0, 1].filter(fraction => roadDistance(entryPosition, pointOnRoad(road, fraction)) <= 2) : [];
+    const exitPosition = pointOnRoad(previousRoad, exit);
+    const joins = branchJoins.length ? branchJoins : [0, 1].filter(fraction => roadDistance(exitPosition, pointOnRoad(road, fraction)) <= 2);
+    if (!joins.length) return null;
+    const entry = joins.sort((a, b) => Math.abs(target.fraction - a) - Math.abs(target.fraction - b))[0];
+    next = path.slice(0, -1);
+    if (!branchJoins.length && last.from !== exit) next.push({ ...last, to: exit });
+    if (entry !== target.fraction) next.push({ roadId: target.roadId, from: entry, to: target.fraction });
   }
-
-  return (start: RoadAnchor, end: RoadAnchor): RoadSection[] | null => {
-    const first = roads.get(start.roadId), last = roads.get(end.roadId);
-    if (!first || !last || !lengths.has(start.roadId) || !lengths.has(end.roadId)) return null;
-    if (start.roadId === end.roadId) {
-      return Math.abs(start.fraction - end.fraction) * lengths.get(start.roadId)! >= MIN_EXTENT_METRES ? [{ roadId: start.roadId, from: start.fraction, to: end.fraction }] : null;
-    }
-    type Entry = { node: string; distance: number; sections: RoadSection[] };
-    const queue: Entry[] = [];
-    const push = (entry: Entry) => {
-      queue.push(entry);
-      let index = queue.length - 1;
-      while (index > 0) {
-        const parent = (index - 1) >> 1;
-        if (queue[parent].distance <= entry.distance) break;
-        queue[index] = queue[parent];
-        index = parent;
-      }
-      queue[index] = entry;
-    };
-    const pop = () => {
-      const entry = queue[0];
-      const tail = queue.pop()!;
-      if (queue.length) {
-        let index = 0;
-        while (index * 2 + 1 < queue.length) {
-          let child = index * 2 + 1;
-          if (child + 1 < queue.length && queue[child + 1].distance < queue[child].distance) child++;
-          if (queue[child].distance >= tail.distance) break;
-          queue[index] = queue[child];
-          index = child;
-        }
-        queue[index] = tail;
-      }
-      return entry;
-    };
-    const distances = new Map<string, number>();
-    for (const fraction of [0, 1]) {
-      const node = key(first.geometry.coordinates[fraction ? first.geometry.coordinates.length - 1 : 0]);
-      const distance = Math.abs(start.fraction - fraction) * lengths.get(start.roadId)!;
-      if (distance >= (distances.get(node) ?? Infinity)) continue;
-      distances.set(node, distance);
-      push({ node, distance, sections: distance > 0.01 ? [{ roadId: start.roadId, from: start.fraction, to: fraction }] : [] });
-    }
-    const ends = [key(last.geometry.coordinates[0]), key(last.geometry.coordinates.at(-1)!)];
-    let best: { distance: number; sections: RoadSection[] } | null = null;
-    let visited = 0;
-    while (queue.length && visited++ < 2500) {
-      const current = pop();
-      if (current.distance !== distances.get(current.node) || current.distance > MAX_EXTENT_METRES || current.distance >= (best?.distance ?? Infinity)) continue;
-      for (let fraction = 0; fraction <= 1; fraction++) {
-        if (current.node !== ends[fraction]) continue;
-        const extra = Math.abs(end.fraction - fraction) * lengths.get(end.roadId)!;
-        const distance = current.distance + extra;
-        const sections = extra > 0.01 ? [...current.sections, { roadId: end.roadId, from: fraction, to: end.fraction }] : current.sections;
-        if (distance >= MIN_EXTENT_METRES && distance <= MAX_EXTENT_METRES && sections.length <= MAX_EXTENT_SECTIONS && distance < (best?.distance ?? Infinity)) best = { distance, sections };
-      }
-      if (current.sections.length >= MAX_EXTENT_SECTIONS - 1) continue;
-      for (const edge of graph.get(current.node) ?? []) {
-        if (edge.section.roadId === start.roadId || edge.section.roadId === end.roadId) continue;
-        const distance = current.distance + edge.length;
-        if (distance >= (distances.get(edge.node) ?? Infinity) || distance > MAX_EXTENT_METRES) continue;
-        distances.set(edge.node, distance);
-        push({ node: edge.node, distance, sections: [...current.sections, edge.section] });
-      }
-    }
-    return best?.sections ?? null;
-  };
+  if (!next.length || next.length > MAX_EXTENT_SECTIONS) return null;
+  let length = 0;
+  for (const section of next) {
+    const selectedRoad = roads.get(section.roadId);
+    if (!selectedRoad) return null;
+    length += roadLength(selectedRoad.geometry.coordinates) * Math.abs(section.to - section.from);
+  }
+  if (length < MIN_EXTENT_METRES || length > MAX_EXTENT_METRES) return null;
+  return reversed ? [...next].reverse().map(section => ({ roadId: section.roadId, from: section.to, to: section.from })) : next;
 }
-
-export type RoadExtentNetwork = ReturnType<typeof createRoadExtentNetwork>;
