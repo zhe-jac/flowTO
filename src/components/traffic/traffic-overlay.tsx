@@ -35,6 +35,8 @@ const HIGHLIGHT_WIDTH = 1.22;
 const HIGHLIGHT_MIN_BASE = 7;
 const LEVEL_ORDER = LEVELS.map((level) => level.id);
 /** How much unaffected roads fade while a scenario's affected roads are highlighted. */
+/** Milliseconds for road colours to switch when toggling Before/After. */
+const COMPARE_TRANSITION_MS = 300;
 const DIM_STRENGTH = 0.45;
 type Flow = {
     index: number;
@@ -177,6 +179,8 @@ export default function TrafficOverlay({ map, renderer, items, interacting, onLi
         });
         const targetLevels = new Float32Array(segments.length);
         const junctionColourCache = new Map<string, number>();
+        // Before/After flips quickly so the comparison is obvious; time-driven changes keep the slower blend.
+        let lastCompareMode: "before" | "after" | null = null;
         const pathLength = (path: number[][]) => path.slice(1).reduce((sum, p, i) => sum + Math.hypot((p[0] - path[i][0]) * 80400, (p[1] - path[i][1]) * 111200), 0);
         let effectiveClosed = new Set<string>();
         let effectiveKey = "";
@@ -292,11 +296,14 @@ export default function TrafficOverlay({ map, renderer, items, interacting, onLi
                 visualEmphasis.delete(index); visualLevels.delete(index);
             }
             const now = performance.now();
+            const comparing = lastCompareMode !== null && lastCompareMode !== mode;
+            lastCompareMode = mode;
+            const colourDuration = preference.matches ? 0 : comparing ? COMPARE_TRANSITION_MS : COLOUR_TRANSITION_MS;
             for (const id of ids) {
                 const index = segmentIndex.get(id);
                 if (index === undefined) continue;
                 const baseline = LEVEL_ORDER.indexOf(directionState(segments[index], share, day).level);
-                colourTweens.set(index, retargetTween(colourTweens.get(index), displayLevel.get(index) ?? baseline, now, preference.matches ? 0 : COLOUR_TRANSITION_MS, baseline));
+                colourTweens.set(index, retargetTween(colourTweens.get(index), displayLevel.get(index) ?? baseline, now, colourDuration, baseline));
                 emphasisTweens.set(index, retargetTween(emphasisTweens.get(index), highlighted.has(index) ? 1 : 0, now, preference.matches ? 0 : HIGHLIGHT_TRANSITION_MS, 0));
             }
             const nextMembershipKey = `${pieceKey}|${[...highlighted].sort((a, b) => a - b).join(",")}`;
