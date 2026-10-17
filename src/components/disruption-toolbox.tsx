@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import type { FeatureCollection } from "geojson";
 import { isPointInToronto } from "@/lib/city-boundary";
@@ -15,6 +15,7 @@ import type { Road, RoadCollection } from "@/lib/types";
 import DisruptionEditor from "./disruption-editor";
 import DisruptionIcon from "./disruption-icon";
 import DisruptionMarkers from "./disruption-markers";
+import DisruptionScenes from "./disruption-scenes";
 import GlassSurface from "./glass-surface";
 
 type Placement = { kind: DisruptionKind; position: Coordinate; point: ScreenPoint; road?: Road };
@@ -32,6 +33,8 @@ export default function DisruptionToolbox({ map }: { map: DisruptionMap }) {
   const [ghost, setGhost] = useState<Ghost | null>(null);
   const [draft, setDraft] = useState<Disruption | null>(null);
   const [items, setItems] = useState<Disruption[]>([]);
+  const [modelsReady, setModelsReady] = useState(false);
+  const sceneItems = useMemo(() => [...items.filter((item) => item.id !== draft?.id), ...(draft ? [draft] : [])], [items, draft]);
   const [formError, setFormError] = useState("");
   const [notice, setNotice] = useState("");
   const roadsRef = useRef(new Map<string, Road>());
@@ -307,7 +310,8 @@ export default function DisruptionToolbox({ map }: { map: DisruptionMap }) {
 
   return (
     <>
-      <DisruptionMarkers map={map} items={items} draft={draft} placing={!!activeTool || !!ghost} onDrag={(event, item) => startDrag(event, item.kind, item)} onSelect={selectItem} />
+      <DisruptionScenes map={map} items={sceneItems} roads={roadsRef.current} onReady={setModelsReady} />
+      <DisruptionMarkers map={map} items={items} draft={draft} modelsReady={modelsReady} placing={!!activeTool || !!ghost} onDrag={(event, item) => startDrag(event, item.kind, item)} onSelect={selectItem} />
       <div className="closure-toolbox" data-map-ui>
         <GlassSurface variant="button"><button className="toolbox-toggle" type="button" aria-label="Disruption toolbox" aria-expanded={open} aria-controls="disruption-toolbox-panel" title="Disruption toolbox" onClick={toggleToolbox}><DisruptionIcon kind="toolbox" />{items.length ? <span className="toolbox-count">{items.length}</span> : null}</button></GlassSurface>
         {open ? <GlassSurface variant="panel"><section className="toolbox-panel" id="disruption-toolbox-panel" aria-label="Disruption toolbox">

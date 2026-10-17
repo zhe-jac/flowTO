@@ -687,6 +687,23 @@ button {
   pointer-events: none;
 }
 
+.disruption-markers[data-models="true"] .disruption-marker {
+  border-color: rgb(255 255 255 / 90%);
+  background: rgb(242 249 255 / 88%);
+  box-shadow: 0 3px 10px rgb(38 78 105 / 16%);
+  color: var(--disruption-ink);
+}
+
+.disruption-markers[data-models="true"] .disruption-marker::after {
+  bottom: -28px;
+  left: 21px;
+  width: 1px;
+  height: 27px;
+  border: 0;
+  background: linear-gradient(var(--disruption-color), transparent);
+  transform: none;
+}
+
 .disruption-markers.is-placing .disruption-marker {
   opacity: 0.6;
   pointer-events: none;
