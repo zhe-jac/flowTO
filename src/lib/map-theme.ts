@@ -23,7 +23,9 @@ export const MAPBOX_BASEMAP_CONFIG = {
   showIndoorLabels: false,
   showAdminBoundaries: false,
   showPlaceLabels: true,
-  showRoadLabels: true,
+  // Off because Standard's road labels include highway shields outside Toronto; the Mapbox map adds its own
+  // street names limited to the city.
+  showRoadLabels: false,
   showTransitLabels: true,
   show3dObjects: false,
   show3dBuildings: true,

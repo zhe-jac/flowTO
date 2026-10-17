@@ -3,7 +3,7 @@
 **Test how Toronto's road closures, construction, and events affect the people moving through the city.** Create a scenario, inspect car and TTC impacts, compare alternatives, and share the result on an interactive 2D or 3D map.
 
 > Planned for Hack the Valley 2026 and the **Hack the Valley x School of Cities** civic-tech track.
-> **Status: base map with 2D/3D views and a Mapbox Standard preview.** The current app is a full-screen Toronto street map with pan, zoom, attribution, and a small 2D/3D toggle. The workspace, road overlays, closure tools, traffic animation, and sharing have been removed so features can be introduced individually. Routing, simulation, and TTC analysis remain planned.
+> **Status: base map with an animated, time-of-day traffic flow layer for all of Toronto.** The app shows a full-screen Toronto map with 2D/3D views, flowing traffic tubes coloured by estimated congestion, a time-of-day clock, and clickable road details. Closure tools, routing, before/after simulation, TTC analysis, and sharing remain planned.
 > This README reflects the revised product direction. [ROADMAP.md](ROADMAP.md) contains the earlier implementation plan and still needs to be reconciled with this scope, especially TTC support and prototype priorities.
 
 ## Why
@@ -41,6 +41,11 @@ The initial demo will cover **one well-developed Toronto area**, using real road
 
 ### Available now
 
+- **Animated traffic flow (all of Toronto):** every road in the City of Toronto is drawn as a glassy tube per direction of travel, with white wind streaks spiralling along it the way traffic moves. Two-way roads show both directions side by side, on the right as Toronto drives. Colour and streak speed follow the time of day: flowing freely (green), moderate (yellow), heavy (orange), stop-and-go (red), with streaks that crawl on jammed roads. Local streets appear once you zoom in.
+- **3D view:** flow ribbons stay flat on the street, as in 2D. The overlay draws its own 3D buildings from vector tiles (Mapbox Streets with a token, OpenFreeMap otherwise). Any building too tall to fit on screen, whose roof runs off the top or which rises from below the bottom edge, turns see-through, so the street behind it stays visible. The decision is made per building on the GPU every frame.
+- **Time of day:** the clock starts at the current Toronto time and runs continuously at **Live**, 1, 5, or 15 simulated minutes per second. Drag the timeline (drawn with the daily traffic curve) to any time, and switch between typical weekday and weekend patterns. Add `?time=17:30&day=weekday` to the URL to open a specific moment, for example for a demo.
+- **Road details:** click any road to see its estimated vehicles per hour, share of capacity used, estimated speed, daily volume, a 24-hour capacity chart with the current time marked, and the City count the numbers come from. The panel updates as the clock runs.
+- **Estimated from City counts:** daily volumes come from Toronto's midblock and intersection traffic counts. A segment without its own count borrows the nearest count on the same street, or the typical value for its road type. Time-of-day curves come from 24-hour counts. Congestion compares hourly volume with an assumed road capacity and uses the BPR speed formula. "How this is estimated" in the legend explains this in the app. The base map's own road colours are neutral, so colour always refers to traffic.
 - A full-screen Toronto map with pan, zoom, attribution, and a small 2D/3D toggle.
 - Toronto-only navigation using the City's official Regional Municipal Boundary: camera bounds, a city-scale minimum zoom, and a polygon check that keeps the map centre inside Toronto. The city outline is drawn and surrounding areas are masked; Mapbox also clips outside buildings, trees, and labels. Both renderers apply the navigation restriction in 2D and 3D.
 - **Mapbox Standard preview** when `NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN` is configured: day lighting and built-in 3D buildings, facades, landmarks, and trees where available. The 3D button enables these objects and tilts the camera; 2D hides them and returns to a flat view.
@@ -54,7 +59,7 @@ Mapbox Standard supplies its own building geometry, materials, and lighting. Det
 
 The fallback uses OpenFreeMap/OpenStreetMap building heights, with a six-metre visual fallback where height is missing. Its pale-to-sky-blue building colours reflect height, not traffic conditions or measured facade colours. MapLibre's worker URL remains explicitly configured to avoid the earlier worker-loading failure.
 
-The bundled Toronto Centreline extract, its build script, and reusable road/scenario helpers remain available for later features. They are not loaded by the current map page. Everything below describes the intended product rather than features available today.
+The traffic layer loads `public/data/traffic.json` (about 43,000 City of Toronto road segments; 14 MB, about 2.7 MB compressed), built by `scripts/build-traffic.ts`. The earlier `downtown-roads.geojson` extract and road/scenario helpers remain available for later features. Everything below describes the intended product rather than features available today.
 
 ### Core analysis and interaction
 
@@ -218,6 +223,7 @@ Mapbox access is associated with your account and subject to its [usage and pric
 | `pnpm dev` | Start the development server |
 | `pnpm build` | Create a production build |
 | `pnpm start` | Serve the production build |
+| `pnpm data:traffic` | Download/cache the Centreline and City traffic counts, then rebuild `public/data/traffic.json` (volumes, time-of-day profiles, sources) |
 | `pnpm data:build` | Download/cache Toronto Centreline and rebuild the selectable road extract and source metadata |
 | `pnpm data:boundary` | Download/cache the official WGS84 Toronto municipal boundary and rebuild the bundled GeoJSON and metadata |
 | `pnpm test` | Test city membership, outside masking, camera constraints, scenario restoration, and closure state |
