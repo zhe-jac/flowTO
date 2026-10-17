@@ -3,7 +3,7 @@
 **Test how Toronto's road closures, construction, and events affect the people moving through the city.** Create a scenario, inspect car and TTC impacts, compare alternatives, and share the result on an interactive 2D or 3D map.
 
 > Planned for Hack the Valley 2026 and the **Hack the Valley x School of Cities** civic-tech track.
-> **Status: base map with 2D/3D views and a Mapbox Standard preview.** The current app is a full-screen Toronto street map with pan, zoom, attribution, and a small 2D/3D toggle. The workspace, road overlays, closure tools, traffic animation, and sharing have been removed so features can be introduced individually. Routing, simulation, and TTC analysis remain planned.
+> **Status: 2D/3D map and a draggable closure toolbox.** The current app is a full-screen Toronto street map with pan, zoom, attribution, a small 2D/3D toggle, and a left-side toolbox for placing closures on downtown road segments. Routing, simulation, traffic animation, sharing, and TTC analysis remain planned.
 > This README reflects the revised product direction. [ROADMAP.md](ROADMAP.md) contains the earlier implementation plan and still needs to be reconciled with this scope, especially TTC support and prototype priorities.
 
 ## Why
@@ -42,9 +42,12 @@ The initial demo will cover **one well-developed Toronto area**, using real road
 ### Available now
 
 - A full-screen Toronto map with pan, zoom, attribution, and a small 2D/3D toggle.
+- A left-side toolbox with a draggable road-closure tool. Drag onto a street or click the tool and then a street; nearby downtown segments highlight and the closure snaps to the closest road on screen. Preview the street, length, and source direction before applying. Applied closures use coral lines, white dashes, and endpoint markers, and can be reopened from the map or toolbox list for removal. Keyboard users can activate the tool, move the map with arrow keys, and press Enter to preview the road at the centre. Escape cancels placement.
 - Toronto-only navigation using the City's official Regional Municipal Boundary: camera bounds, a city-scale minimum zoom, and a polygon check that keeps the map centre inside Toronto. Surrounding streets gradually fade into a sky-blue background beyond the boundary, without a hard outline. Both renderers share the fade and apply the navigation restriction in 2D and 3D.
 - **Mapbox Standard preview** when `NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN` is configured: day lighting and built-in 3D buildings, facades, landmarks, and trees where available. The 3D button enables these objects and tilts the camera; 2D hides them and returns to a flat view.
 - A light sky-blue sandbox theme: cool off-white land, brighter blue water, pale blue buildings, and soft mint greenspace. Business/POI labels, landmark icons, and indoor labels are hidden; street, place, and transit labels remain visible. The palette and Mapbox settings live in `src/lib/map-theme.ts`.
+- Liquid-glass controls across the toolbox, closure previews, map-view switch, notifications, and native map controls: translucent blue-white surfaces, backdrop blur, white edge highlights, and subtle SVG edge refraction where supported. Text stays sharp, with opaque fallbacks and reduced-transparency/motion support. The shared SVG filter lives in `src/components/glass-filter.tsx` and material tokens in `src/app/globals.css`.
+- A clearer glass trial uses 30% tint on small controls, 52% on text panels, and 8–10 px CSS blur. The toolbox button and panel additionally use a lazily loaded `liquid-glass-react` optical layer; interactive controls remain separate from the effect. Reduced-transparency or higher-contrast preferences retain the opaque CSS material. The library's displacement rendering varies by browser.
 - **MapLibre/OpenFreeMap fallback** when no token is configured: the existing coloured map remains available with height-based building extrusions. A small notice explains how to enable Mapbox.
 - Explicit container sizing, resize handling, and loading/error feedback.
 
@@ -54,7 +57,7 @@ Mapbox Standard supplies its own building geometry, materials, and lighting. Det
 
 The fallback uses OpenFreeMap/OpenStreetMap building heights, with a six-metre visual fallback where height is missing. Its pale-to-sky-blue building colours reflect height, not traffic conditions or measured facade colours. MapLibre's worker URL remains explicitly configured to avoid the earlier worker-loading failure.
 
-The bundled Toronto Centreline extract, its build script, and reusable road/scenario helpers remain available for later features. They are not loaded by the current map page. Everything below describes the intended product rather than features available today.
+The bundled Toronto Centreline extract loads only when the toolbox is opened. Placement covers the downtown extract and requires street-level zoom; the toolbox includes a Show area shortcut. Closures cover whole road segments, remain in memory for the current session, and do not yet affect traffic or routing. Adjustable endpoints, timing, lane restrictions, and persistence remain planned. Existing illustrative traffic values in the road file are not displayed by the closure tool. Everything below describes the intended product rather than features available today.
 
 ### Core analysis and interaction
 
