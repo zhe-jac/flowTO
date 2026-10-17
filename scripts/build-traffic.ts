@@ -2,6 +2,7 @@ import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import type { FeatureCollection, MultiLineString } from "geojson";
 import { isPointInToronto, TORONTO_BOUNDS } from "../src/lib/city-boundary";
 import { CLASS_ASSUMPTIONS, type DayType, type TrafficData, type TrafficSegment, type VolumeSource } from "../src/lib/traffic/types";
+import { prepareTrafficCoordinates } from "../src/lib/traffic/geometry";
 const bounds = process.env.MAP_BOUNDS ? process.env.MAP_BOUNDS.split(",").map(Number) : TORONTO_BOUNDS.flat();
 if (bounds.length !== 4 || bounds.some((value) => !Number.isFinite(value)))
     throw new Error("MAP_BOUNDS must be west,south,east,north");
@@ -175,6 +176,8 @@ for (const feature of centreline.features) {
         if (length < 1)
             continue;
         const id = parts.length === 1 ? String(p.CENTRELINE_ID) : `${p.CENTRELINE_ID}:${index}`;
+        const coords = prepareTrafficCoordinates(part);
+        if (coords.length < 2) continue;
         segments.push({
             id,
             key: String(p.CENTRELINE_ID),
@@ -187,7 +190,7 @@ for (const feature of centreline.features) {
             source: { kind: "class" },
             from: String(p.FROM_INTERSECTION_ID),
             to: String(p.TO_INTERSECTION_ID),
-            coords: part.map(([lon, lat]) => [Number(lon.toFixed(5)), Number(lat.toFixed(5))]),
+            coords,
         });
     }
 }

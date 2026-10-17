@@ -1,27 +1,22 @@
 import type { CongestionLevel } from "./model";
-type Rgb = [
-    number,
-    number,
-    number
-];
-export const LEVEL_COLORS: Record<CongestionLevel, {
-    road: Rgb;
-    vehicle: Rgb;
-    css: string;
-}> = {
-    free: { road: [52, 178, 124], vehicle: [16, 138, 92], css: "#1f9c6c" },
-    moderate: { road: [236, 190, 52], vehicle: [207, 152, 8], css: "#d9a20f" },
-    heavy: { road: [242, 132, 52], vehicle: [222, 100, 20], css: "#e06a1a" },
-    severe: { road: [218, 60, 52], vehicle: [186, 30, 36], css: "#c42a2a" },
+
+type Rgb = [number, number, number];
+
+export const LEVEL_COLORS: Record<CongestionLevel, { road: Rgb; vehicle: Rgb; css: string }> = {
+  free: { road: [48, 164, 119], vehicle: [29, 126, 88], css: "#30a477" },
+  moderate: { road: [212, 173, 89], vehicle: [170, 129, 46], css: "#d4ad59" },
+  heavy: { road: [223, 152, 124], vehicle: [184, 108, 82], css: "#df987c" },
+  severe: { road: [213, 107, 116], vehicle: [173, 69, 81], css: "#d56b74" },
 };
+
 export const CLASS_WIDTHS: Record<string, number> = {
-    Expressway: 11,
-    "Expressway Ramp": 6,
-    "Major Arterial": 8,
-    "Major Arterial Ramp": 6,
-    "Minor Arterial": 7,
-    "Minor Arterial Ramp": 6,
-    Collector: 5.5,
-    "Collector Ramp": 5,
-    Local: 3.5,
+  Expressway: 6.5,
+  "Expressway Ramp": 4,
+  "Major Arterial": 4.6,
+  "Major Arterial Ramp": 3.6,
+  "Minor Arterial": 4,
+  "Minor Arterial Ramp": 3.2,
+  Collector: 3.2,
+  "Collector Ramp": 2.8,
+  Local: 2.2,
 };
