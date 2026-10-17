@@ -38,7 +38,7 @@ export default function DisruptionEditor({ draft, road, existing, error, onChang
           <label className="disruption-field">Starts<input type="datetime-local" value={draft.startsAt} onChange={(event) => onChange({ ...draft, startsAt: event.target.value })} /></label>
           <label className="disruption-field">Ends<input type="datetime-local" min={draft.startsAt || undefined} value={draft.endsAt} onChange={(event) => onChange({ ...draft, endsAt: event.target.value })} /></label>
         </fieldset>
-        <p className="disruption-schedule-note">Schedules are recorded for planning. Full closures apply at every playback time; diversions and lane-reduction impacts are not calculated yet.</p>
+        <p className="disruption-schedule-note">Schedules are recorded for planning. Disruptions apply at every playback time. Diversions and event traffic are estimated after saving.</p>
         {error ? <p className="disruption-form-error" role="alert">{error}</p> : null}
         <div className="closure-preview-actions">
           {existing ? <button className="closure-remove" type="button" onClick={onRemove}>Remove</button> : <button type="button" onClick={onCancel}>Cancel</button>}

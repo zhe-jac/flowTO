@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { Map as MapboxMap } from "mapbox-gl";
 import type { Map as MapLibreMap } from "maplibre-gl";
 import GlassSurface from "./glass-surface";
+import SlidingControl from "./sliding-control";
 
 type ControlMap = Pick<MapboxMap | MapLibreMap, "getZoom" | "getMinZoom" | "getMaxZoom" | "getBearing" | "zoomIn" | "zoomOut" | "easeTo"> & {
   on: (event: "move", listener: () => void) => unknown;
@@ -36,10 +37,10 @@ export default function MapControls({ map, is3D, onViewChange }: { map: ControlM
     <>
       <div className="map-view-controls" data-map-ui>
         <GlassSurface variant="view">
-          <div className="map-view-toggle" role="group" aria-label="Map view">
+          <SlidingControl className="map-view-toggle" label="Map view" value={is3D ? "3d" : "2d"}>
             <button type="button" aria-pressed={!is3D} disabled={!map} onClick={() => onViewChange(false)}>2D</button>
             <button type="button" aria-pressed={is3D} disabled={!map} onClick={() => onViewChange(true)}>3D</button>
-          </div>
+          </SlidingControl>
         </GlassSurface>
       </div>
       <div className="map-navigation-controls" data-map-ui>
