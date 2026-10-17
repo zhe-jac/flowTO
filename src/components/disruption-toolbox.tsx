@@ -16,6 +16,8 @@ import DisruptionEditor from "./disruption-editor";
 import DisruptionIcon from "./disruption-icon";
 import DisruptionMarkers from "./disruption-markers";
 import DisruptionScenes from "./disruption-scenes";
+import DisruptionEndpoints from "./disruption-endpoints";
+import { extentDetails } from "@/lib/road-extent";
 import { motion, type Transition, type Variants } from "motion/react";
 
 type Placement = { kind: DisruptionKind; position: Coordinate; point: ScreenPoint; road?: Road };
@@ -124,8 +126,8 @@ export default function DisruptionToolbox({ map, onItemsChange, onInteractionCha
 
   useEffect(() => {
     itemsRef.current = items;
-    setDisruptionData(map, "disruption-applied", disruptionFeatures(items, roadsRef.current));
-  }, [map, items]);
+    setDisruptionData(map, "disruption-applied", disruptionFeatures(items.filter(item => item.id !== draft?.id), roadsRef.current));
+  }, [map, items, draft?.id]);
 
   useEffect(() => {
     setDisruptionData(map, "disruption-active", disruptionFeatures(draft ? [draft] : [], roadsRef.current));
@@ -164,8 +166,7 @@ export default function DisruptionToolbox({ map, onItemsChange, onInteractionCha
           const candidates = [...ids].map((id) => roadsRef.current.get(id)).filter((road): road is Road => !!road);
           const snap = nearestRoad(candidates, point, (coordinate) => map.project(coordinate));
           if (snap) {
-            const location = map.unproject([snap.point.x, snap.point.y]);
-            const position: Coordinate = [location.lng, location.lat];
+            const position = snap.coordinate;
             if (isPointInToronto(position)) result = { kind, point: snap.point, position, road: snap.road };
           }
         }
@@ -192,7 +193,7 @@ export default function DisruptionToolbox({ map, onItemsChange, onInteractionCha
       const duplicate = placement.kind === "closure" ? itemsRef.current.find((item) => item.kind === "closure" && item.roadId === placement.road?.properties.id) : undefined;
       const item = original ?? duplicate ?? createDisruption(crypto.randomUUID(), placement.kind, placement.position, placement.road);
       if (!item) return;
-      setDraft(item.kind === "event" ? { ...item, position: placement.position } : { ...item, position: placement.position, roadId: placement.road!.properties.id });
+      setDraft(duplicate && !original ? { ...duplicate } : item.kind === "event" ? { ...item, position: placement.position } : { ...item, position: placement.position, roadId: placement.road!.properties.id, roadSections: undefined });
       setFormError("");
       setNotice("");
     };
@@ -369,6 +370,7 @@ export default function DisruptionToolbox({ map, onItemsChange, onInteractionCha
     <>
       <DisruptionScenes map={map} items={sceneItems} roads={roadsRef.current} onReady={setModelsReady} />
       <DisruptionMarkers map={map} items={items} draft={draft} modelsReady={modelsReady} placing={!!activeTool || !!ghost} onDrag={(event, item) => startDrag(event, item.kind, item)} onSelect={selectItem} />
+      {draft && draft.kind !== "event" ? <DisruptionEndpoints map={map} draft={draft} roads={roadsRef.current} onChange={item => { setDraft(item); setFormError(""); }} /> : null}
       <div className="closure-toolbox" data-map-ui>
         <motion.div className="toolbox-morph" data-open={open} initial={false}
           animate={{ width: open ? PANEL_WIDTH : BUTTON_SIZE, height: open ? panelHeight || BUTTON_SIZE : BUTTON_SIZE, borderRadius: open ? 24 : 17 }}
@@ -386,7 +388,7 @@ export default function DisruptionToolbox({ map, onItemsChange, onInteractionCha
               <motion.button ref={toggleRef} tabIndex={open ? -1 : 0} aria-hidden={open} className="toolbox-toggle" type="button" aria-label="Disruption toolbox" aria-expanded={open} aria-controls="disruption-toolbox-panel" title="Disruption toolbox" onClick={toggleToolbox} initial={false} animate={open ? { opacity: 0, transition: { duration: 0.1 } } : { opacity: 1, transition: { duration: 0.2, delay: 0.22 } }} style={{ pointerEvents: open ? "none" : "auto" }}><DisruptionIcon kind="toolbox" />{items.length ? <span className="toolbox-count">{items.length}</span> : null}</motion.button>
         </motion.div>
       </div>
-      {draft ? <DisruptionEditor draft={draft} road={draft.kind === "event" ? undefined : roadsRef.current.get(draft.roadId)} existing={existing} error={formError} onChange={(item) => { setDraft(item); setFormError(""); }} onSave={saveDraft} onCancel={() => { setDraft(null); setFormError(""); toolButtonsRef.current.get(draft.kind)?.focus(); }} onRemove={() => { setItems((current) => current.filter((item) => item.id !== draft.id)); setDraft(null); setNotice(`${disruptionTool(draft.kind).label} removed.`); toolButtonsRef.current.get(draft.kind)?.focus(); }} /> : null}
+      {draft ? <DisruptionEditor draft={draft} road={draft.kind === "event" ? undefined : roadsRef.current.get(draft.roadId)} extent={draft.kind === "event" ? undefined : extentDetails(draft, roadsRef.current)} existing={existing} error={formError} onChange={(item) => { setDraft(item); setFormError(""); }} onSave={saveDraft} onCancel={() => { setDraft(null); setFormError(""); toolButtonsRef.current.get(draft.kind)?.focus(); }} onRemove={() => { setItems((current) => current.filter((item) => item.id !== draft.id)); setDraft(null); setNotice(`${disruptionTool(draft.kind).label} removed.`); toolButtonsRef.current.get(draft.kind)?.focus(); }} /> : null}
       {activeTool || ghost ? <div className="closure-placement-help" data-map-ui data-kind={activeTool ?? ghost?.kind}><span className="closure-status-dot" /><span>{ghost?.keyboard ? "Arrow keys move the map · Enter previews the location" : ghost?.valid ? `${ghost.dragging ? "Release" : "Click"} to preview ${ghost.name}` : activeTool === "event" ? "Choose an event location inside Toronto" : "Choose a highlighted downtown street"}</span><button type="button" onClick={() => cancelRef.current()}>Cancel <kbd>Esc</kbd></button></div> : null}
       {ghost ? <div className={`closure-ghost${ghost.valid ? " is-snapped" : ""}`} data-kind={ghost.kind} style={{ left: ghost.x, top: ghost.y }} aria-hidden="true"><span><DisruptionIcon kind={ghost.kind} /></span><small>{ghost.name}</small></div> : null}
       <p className={notice && !activeTool ? "closure-notice" : "closure-announcement"} role="status" aria-live="polite">{notice}</p>

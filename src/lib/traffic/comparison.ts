@@ -1,6 +1,7 @@
 import type { Disruption } from "../disruptions";
 import type { Impact, ReroutingPlan } from "./rerouting";
 import { disruptionStrength, scaleImpact } from "./scenario-timing";
+import { affectedRoadIds } from "../road-extent";
 
 /** One shared effective plan for road colours, animation, statistics and details. */
 export function comparisonImpacts(plan: ReroutingPlan | null | undefined, items: Disruption[], placedAt: ReadonlyMap<string, number>, minutes: number, mode: "before" | "after") {
@@ -16,7 +17,7 @@ export function comparisonImpacts(plan: ReroutingPlan | null | undefined, items:
   for (const item of items) {
     const strength = disruptionStrength(item, placedAt.get(item.id) ?? minutes, minutes);
     if (strength <= 0) continue;
-    if (item.kind !== "event" && item.restriction === "full-closure") closed.add(item.roadId);
+    if (item.kind !== "event" && item.restriction === "full-closure") for (const roadId of affectedRoadIds(item)) closed.add(roadId);
     const contribution = plan?.perDisruption?.[item.id];
     if (!contribution) continue;
     for (const [id, impact] of Object.entries(contribution)) {

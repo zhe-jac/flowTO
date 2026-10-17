@@ -2037,3 +2037,60 @@ button {
 .traffic-controls-shell[data-minimized="true"] .traffic-clock strong {
   font-size: 20px;
 }
+
+.disruption-endpoints {
+  position: absolute;
+  z-index: 4;
+  inset: 0;
+  pointer-events: none;
+}
+
+.disruption-endpoint {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: grab;
+  touch-action: none;
+  pointer-events: auto;
+}
+
+.disruption-endpoint span {
+  width: 18px;
+  height: 18px;
+  border: 3px solid var(--disruption-color);
+  border-radius: 50%;
+  background: var(--glass-panel-tint);
+  box-shadow: 0 0 0 4px rgb(var(--disruption-rgb) / 16%), 0 2px 6px rgb(15 40 60 / 24%);
+}
+
+.disruption-endpoint:is(:hover, :focus-visible, [data-dragging="true"]) span {
+  box-shadow: 0 0 0 7px rgb(var(--disruption-rgb) / 24%), 0 2px 6px rgb(15 40 60 / 24%);
+}
+
+.disruption-endpoint:focus-visible {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: -4px;
+  border-radius: 50%;
+}
+
+.disruption-endpoint[data-dragging="true"] {
+  cursor: grabbing;
+}
+
+.disruption-endpoint[data-invalid="true"] span {
+  border-style: dashed;
+}
+
+.road-extent-help {
+  margin: 10px 0 0;
+  color: var(--ui-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
