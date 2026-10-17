@@ -25,7 +25,7 @@ const EMPTY: FeatureCollection = { type: "FeatureCollection", features: [] };
 const SOURCES = ["disruption-roads", "disruption-active", "disruption-applied"];
 const LAYERS = ["disruption-road-guides", "disruption-road-targets", ...["applied", "active"].flatMap((kind) => ["halo", "line", "stripes", "ends", "locations"].map((layer) => `disruption-${kind}-${layer}`))];
 
-export default function DisruptionToolbox({ map }: { map: DisruptionMap }) {
+export default function DisruptionToolbox({ map, onItemsChange, onInteractionChange }: { map: DisruptionMap; onItemsChange: (items: Disruption[]) => void; onInteractionChange: (active: boolean) => void }) {
   const [open, setOpen] = useState(false);
   const [loadState, setLoadState] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [retry, setRetry] = useState(0);
@@ -47,6 +47,16 @@ export default function DisruptionToolbox({ map }: { map: DisruptionMap }) {
   const cancelRef = useRef<() => void>(() => {});
   const activateRef = useRef<(kind: DisruptionKind) => void>(() => {});
   const toolButtonsRef = useRef(new Map<DisruptionKind, HTMLButtonElement>());
+  const interacting = !!activeTool || !!ghost || !!draft;
+
+  useEffect(() => { onItemsChange(items); }, [items, onItemsChange]);
+  useEffect(() => { onInteractionChange(interacting); }, [interacting, onInteractionChange]);
+
+  useEffect(() => {
+    const container = map.getCanvas().parentElement;
+    if (container) container.dataset.disruptionInteraction = String(interacting);
+    return () => { if (container) delete container.dataset.disruptionInteraction; };
+  }, [map, interacting]);
 
   useEffect(() => {
     map.addSource("disruption-roads", { type: "geojson", data: EMPTY, attribution: '<a href="https://open.toronto.ca/dataset/toronto-centreline-tcl/" target="_blank" rel="noopener noreferrer">Roads: City of Toronto</a>' });

@@ -5,7 +5,7 @@ import type { ExpressionSpecification, Map as MapLibreMap } from "maplibre-gl";
 import { MAP_PALETTE } from "@/lib/map-theme";
 import { BOUNDARY_ATTRIBUTION, restrictCameraToToronto, TORONTO_BOUNDS, TORONTO_MIN_ZOOM } from "@/lib/city-boundary";
 import { TORONTO_DISTANT_MASK, TORONTO_FADE_COORDINATES, TORONTO_FADE_IMAGE, TORONTO_MASK_COLOR } from "@/lib/city-boundary-presentation";
-import DisruptionToolbox from "./disruption-toolbox";
+import MapWorkspace from "./map-workspace";
 import MapControls from "./map-controls";
 
 const BUILDING_COLOR: ExpressionSpecification = [
@@ -63,6 +63,11 @@ export default function MapLibreCanvas() {
             if (layer.type === "background") map.setPaintProperty(layer.id, "background-color", MAP_PALETTE.land);
             if (layer.type === "fill" && sourceLayer === "water") map.setPaintProperty(layer.id, "fill-color", MAP_PALETTE.water);
             if (layer.type === "fill" && sourceLayer === "park") map.setPaintProperty(layer.id, "fill-color", MAP_PALETTE.greenspace);
+            if (layer.type === "line" && sourceLayer === "transportation" && !/path|rail|ferry|cable|pier/.test(layer.id)) {
+              const major = /motorway|trunk/.test(layer.id);
+              const color = layer.id.includes("casing") ? (major ? "#b4cde0" : "#cddfeb") : major ? MAP_PALETTE.motorways : /primary|secondary|link/.test(layer.id) ? MAP_PALETTE.trunks : MAP_PALETTE.roads;
+              map.setPaintProperty(layer.id, "line-color", color);
+            }
           }
           if (map.getLayer("building")) {
             map.setPaintProperty("building", "fill-color", BUILDING_COLOR);
@@ -149,7 +154,7 @@ export default function MapLibreCanvas() {
     <main className="map-page" aria-label="Toronto street map">
       <div ref={containerRef} className="map-container" />
       <MapControls map={ready ? mapRef.current : null} is3D={is3D} onViewChange={changeView} />
-      {ready && mapRef.current ? <DisruptionToolbox map={mapRef.current} /> : null}
+      {ready && mapRef.current ? <MapWorkspace map={mapRef.current} renderer="maplibre" /> : null}
       {status ? <p className="map-message" role="status">{status}</p> : null}
       {error ? (
         <div className="map-message map-error" role="alert">

@@ -9,11 +9,21 @@
     "build": "next build",
     "start": "next start",
     "check": "tsc --noEmit",
-    "test": "tsx --test src/lib/*.test.ts",
+    "test": "tsx --test src/lib/*.test.ts src/lib/traffic/*.test.ts",
     "data:build": "tsx scripts/build-roads.ts",
-    "data:boundary": "tsx scripts/build-city-boundary.ts && tsx scripts/build-city-fade.ts"
+    "data:boundary": "tsx scripts/build-city-boundary.ts && tsx scripts/build-city-fade.ts",
+    "data:traffic": "tsx scripts/build-traffic.ts",
+    "data:traffic-geometry": "tsx scripts/refresh-traffic-geometry.ts"
   },
   "dependencies": {
+    "@deck.gl/core": "9.4.0",
+    "@deck.gl/extensions": "9.4.0",
+    "@deck.gl/geo-layers": "9.4.0",
+    "@deck.gl/layers": "9.4.0",
+    "@deck.gl/mapbox": "9.4.0",
+    "@deck.gl/maplibre": "9.4.0",
+    "@loaders.gl/core": "4.5.2",
+    "@loaders.gl/mvt": "4.5.2",
     "liquid-glass-react": "^1.1.1",
     "mapbox-gl": "^3.33.0",
     "maplibre-gl": "^6.14.0",
