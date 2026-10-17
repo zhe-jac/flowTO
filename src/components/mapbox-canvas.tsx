@@ -6,6 +6,7 @@ import { MAPBOX_BASEMAP_CONFIG } from "@/lib/map-theme";
 import { BOUNDARY_ATTRIBUTION, restrictCameraToToronto, TORONTO_BOUNDS, TORONTO_MIN_ZOOM } from "@/lib/city-boundary";
 import { TORONTO_DISTANT_MASK, TORONTO_FADE_COORDINATES, TORONTO_FADE_IMAGE, TORONTO_MASK_COLOR } from "@/lib/city-boundary-presentation";
 import ClosureToolbox from "./closure-toolbox";
+import MapControls from "./map-controls";
 
 export default function MapboxCanvas({ accessToken }: { accessToken: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -47,7 +48,6 @@ export default function MapboxCanvas({ accessToken }: { accessToken: string }) {
 
         mapRef.current = map;
         releaseBoundary = restrictCameraToToronto(map);
-        map.addControl(new mapboxgl.NavigationControl({ visualizePitch: true }), "top-right");
         map.addControl(new mapboxgl.AttributionControl({ compact: false }), "bottom-right");
         map.on("load", () => {
           if (disposed || !map) return;
@@ -123,10 +123,7 @@ export default function MapboxCanvas({ accessToken }: { accessToken: string }) {
   return (
     <main className="map-page" aria-label="Toronto street map with Mapbox Standard">
       <div ref={containerRef} className="map-container" />
-      <div className="map-view-toggle" role="group" aria-label="Map view" data-map-ui>
-        <button type="button" aria-pressed={!is3D} disabled={!ready} onClick={() => changeView(false)}>2D</button>
-        <button type="button" aria-pressed={is3D} disabled={!ready} onClick={() => changeView(true)}>3D</button>
-      </div>
+      <MapControls map={ready ? mapRef.current : null} is3D={is3D} onViewChange={changeView} />
       {ready && mapRef.current ? <ClosureToolbox map={mapRef.current} /> : null}
       {status ? <p className="map-message" role="status">{status}</p> : null}
       {error ? (

@@ -37,16 +37,16 @@ body {
   pointer-events: none;
 }
 
-:is(.map-message, .map-view-toggle, .map-provider-notice, .toolbox-toggle, .toolbox-panel, .closure-preview, .closure-placement-help, .closure-notice, :where(.closure-ghost > span, .closure-ghost small)),
-.map-page :is(.mapboxgl-ctrl-group, .maplibregl-ctrl-group, .mapboxgl-ctrl-attrib, .maplibregl-ctrl-attrib) {
+:is(.map-message, .map-view-toggle, .map-zoom-controls, .map-provider-notice, .toolbox-toggle, .toolbox-panel, .closure-preview, .closure-placement-help, .closure-notice, :where(.closure-ghost > span, .closure-ghost small)),
+.map-page :is(.mapboxgl-ctrl-attrib, .maplibregl-ctrl-attrib) {
   isolation: isolate;
   border: 1px solid var(--glass-border);
   background: var(--glass-tint);
   box-shadow: var(--glass-shadow);
 }
 
-:is(.map-message, .map-view-toggle, .map-provider-notice, .toolbox-toggle, .toolbox-panel, .closure-preview, .closure-placement-help, .closure-notice, :where(.closure-ghost > span, .closure-ghost small))::before,
-.map-page :is(.mapboxgl-ctrl-group, .maplibregl-ctrl-group, .mapboxgl-ctrl-attrib, .maplibregl-ctrl-attrib)::before {
+:is(.map-message, .map-view-toggle, .map-zoom-controls, .map-provider-notice, .toolbox-toggle, .toolbox-panel, .closure-preview, .closure-placement-help, .closure-notice, :where(.closure-ghost > span, .closure-ghost small))::before,
+.map-page :is(.mapboxgl-ctrl-attrib, .maplibregl-ctrl-attrib)::before {
   position: absolute;
   z-index: -1;
   inset: 0;
@@ -58,7 +58,7 @@ body {
 
 .toolbox-panel,
 .closure-ghost > span,
-.map-page :is(.mapboxgl-ctrl-group, .maplibregl-ctrl-group, .mapboxgl-ctrl-attrib, .maplibregl-ctrl-attrib) {
+.map-page :is(.mapboxgl-ctrl-attrib, .maplibregl-ctrl-attrib) {
   position: relative;
 }
 
@@ -77,7 +77,7 @@ button {
   -webkit-tap-highlight-color: transparent;
 }
 
-:is(.map-view-toggle, .closure-toolbox, .closure-preview, .closure-placement-help, .map-error) button {
+:is(.map-view-toggle, .map-zoom-controls, .closure-toolbox, .closure-preview, .closure-placement-help, .map-error) button {
   transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, transform 160ms ease;
 }
 
@@ -109,22 +109,30 @@ button {
   border-color: rgb(190 91 74 / 42%);
 }
 
-.map-view-toggle {
+.map-view-controls {
   position: absolute;
-  z-index: 1;
+  z-index: 3;
   top: 16px;
   left: 16px;
-  display: flex;
-  gap: 3px;
+}
+
+.map-view-toggle {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  height: 48px;
   padding: 5px;
-  border-radius: 18px;
+  border-radius: 17px;
 }
 
 .map-view-toggle button {
-  min-height: 34px;
-  padding: 8px 14px;
-  border: 0;
-  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 36px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 11px;
   background: transparent;
   color: var(--ui-ink);
   font: 600 13px "Avenir Next", "Segoe UI", sans-serif;
@@ -132,7 +140,8 @@ button {
 }
 
 .map-view-toggle button[aria-pressed="true"] {
-  background: rgb(255 255 255 / 48%);
+  border-color: rgb(255 255 255 / 90%);
+  background: rgb(191 226 250 / 55%);
   box-shadow: 0 2px 6px rgb(52 103 140 / 10%), var(--glass-inner);
   color: var(--ui-accent);
 }
@@ -146,9 +155,53 @@ button {
   cursor: wait;
 }
 
-.map-view-toggle button:focus-visible {
+.map-view-toggle button:focus-visible,
+.map-zoom-controls button:focus-visible {
   outline: 2px solid #4384b1;
-  outline-offset: 2px;
+  outline-offset: -3px;
+}
+
+.map-navigation-controls {
+  position: absolute;
+  z-index: 3;
+  top: 16px;
+  right: 16px;
+}
+
+.map-zoom-controls {
+  display: grid;
+  overflow: hidden;
+  border-radius: 17px;
+}
+
+.map-zoom-controls button {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ui-ink);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.map-zoom-controls button + button {
+  border-top: 1px solid rgb(77 125 157 / 17%);
+}
+
+.map-zoom-controls button:hover:not(:disabled) {
+  background: rgb(255 255 255 / 38%);
+}
+
+.map-zoom-controls button:active:not(:disabled) {
+  background: rgb(191 226 250 / 55%);
+}
+
+.map-zoom-controls button:disabled {
+  opacity: 0.35;
+  cursor: default;
 }
 
 .map-error p {
@@ -228,14 +281,25 @@ button {
   border-radius: 24px;
 }
 
-.toolbox-glass-shell > :is(.toolbox-toggle, .toolbox-panel) {
+.toolbox-glass-view {
+  width: 114px;
+  height: 48px;
+  border-radius: 17px;
+}
+
+.toolbox-glass-navigation {
+  width: 48px;
+  border-radius: 17px;
+}
+
+.toolbox-glass-shell > :is(.toolbox-toggle, .toolbox-panel, .map-view-toggle, .map-zoom-controls) {
   position: relative;
   z-index: 1;
   width: 100%;
 }
 
-.toolbox-glass-shell[data-enhanced="true"] > :is(.toolbox-toggle, .toolbox-panel)::before,
-.toolbox-glass-shell[data-enhanced="true"] > :is(.toolbox-toggle, .toolbox-panel)::after {
+.toolbox-glass-shell[data-enhanced="true"] > :is(.toolbox-toggle, .toolbox-panel, .map-view-toggle, .map-zoom-controls)::before,
+.toolbox-glass-shell[data-enhanced="true"] > :is(.toolbox-toggle, .toolbox-panel, .map-view-toggle, .map-zoom-controls)::after {
   display: none;
 }
 
@@ -276,7 +340,7 @@ button {
 
 .toolbox-toggle[aria-expanded="true"] {
   border-color: rgb(255 255 255 / 95%);
-  background: rgb(191 226 250 / 35%);
+  background: rgb(191 226 250 / 55%);
   color: var(--ui-accent);
 }
 
@@ -686,37 +750,6 @@ button {
   outline-offset: 3px;
 }
 
-.map-page :is(.mapboxgl-ctrl-group, .maplibregl-ctrl-group) {
-  overflow: hidden;
-  border-radius: 16px;
-}
-
-.map-page :is(.mapboxgl-ctrl-group, .maplibregl-ctrl-group) button {
-  width: 38px;
-  height: 38px;
-  background-color: transparent;
-  transition: background-color 160ms ease;
-}
-
-.map-page :is(.mapboxgl-ctrl-group, .maplibregl-ctrl-group) button + button {
-  border-top: 1px solid rgb(77 125 157 / 15%);
-}
-
-.map-page :is(.mapboxgl-ctrl-group, .maplibregl-ctrl-group) button:hover {
-  background-color: rgb(255 255 255 / 54%);
-}
-
-.map-page :is(.mapboxgl-ctrl-group, .maplibregl-ctrl-group) button:focus-visible {
-  outline: 2px solid #4384b1;
-  outline-offset: -4px;
-  box-shadow: none;
-}
-
-.map-page :is(.mapboxgl-ctrl-top-right, .maplibregl-ctrl-top-right) > .mapboxgl-ctrl,
-.map-page :is(.mapboxgl-ctrl-top-right, .maplibregl-ctrl-top-right) > .maplibregl-ctrl {
-  margin: 16px 16px 0 0;
-}
-
 .map-page :is(.mapboxgl-ctrl-attrib, .maplibregl-ctrl-attrib) {
   margin: 0 8px 6px 0;
   padding: 3px 10px;
@@ -732,20 +765,19 @@ button {
 
 @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   :root {
-    --glass-tint: rgb(236 247 255 / 30%);
-    --glass-panel-tint: rgb(242 249 255 / 52%);
+    --glass-tint: rgb(236 247 255 / 45%);
+    --glass-panel-tint: rgb(242 249 255 / 64%);
   }
 
-  :is(.map-message, .map-view-toggle, .map-provider-notice, .toolbox-toggle, .toolbox-panel, .closure-preview, .closure-placement-help, .closure-notice, :where(.closure-ghost > span, .closure-ghost small))::before,
-  .map-page :is(.mapboxgl-ctrl-group, .maplibregl-ctrl-group, .mapboxgl-ctrl-attrib, .maplibregl-ctrl-attrib)::before {
+  :is(.map-message, .map-view-toggle, .map-zoom-controls, .map-provider-notice, .toolbox-toggle, .toolbox-panel, .closure-preview, .closure-placement-help, .closure-notice, :where(.closure-ghost > span, .closure-ghost small))::before,
+  .map-page :is(.mapboxgl-ctrl-attrib, .maplibregl-ctrl-attrib)::before {
     -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.35);
     backdrop-filter: blur(var(--glass-blur)) saturate(1.35);
   }
 }
 
 @supports (backdrop-filter: url("#radio-glass")) {
-  :is(.map-view-toggle, .toolbox-toggle, .toolbox-panel, .closure-preview, .closure-placement-help)::after,
-  .map-page :is(.mapboxgl-ctrl-group, .maplibregl-ctrl-group)::after {
+  :is(.map-view-toggle, .map-zoom-controls, .toolbox-toggle, .toolbox-panel, .closure-preview, .closure-placement-help)::after {
     position: absolute;
     z-index: -1;
     inset: 0;
@@ -779,7 +811,7 @@ button {
     animation: none;
   }
 
-  :is(.map-view-toggle, .closure-toolbox, .closure-preview, .closure-placement-help, .map-error, .map-page .mapboxgl-ctrl-group, .map-page .maplibregl-ctrl-group) button {
+  :is(.map-view-toggle, .map-zoom-controls, .closure-toolbox, .closure-preview, .closure-placement-help, .map-error) button {
     transition: none;
   }
 }
@@ -791,10 +823,9 @@ button {
     --glass-border: #9ebdd2;
   }
 
-  :is(.map-message, .map-view-toggle, .map-provider-notice, .toolbox-toggle, .toolbox-panel, .closure-preview, .closure-placement-help, .closure-notice, :where(.closure-ghost > span, .closure-ghost small))::before,
-  :is(.map-view-toggle, .toolbox-toggle, .toolbox-panel, .closure-preview, .closure-placement-help)::after,
-  .map-page :is(.mapboxgl-ctrl-group, .maplibregl-ctrl-group, .mapboxgl-ctrl-attrib, .maplibregl-ctrl-attrib)::before,
-  .map-page :is(.mapboxgl-ctrl-group, .maplibregl-ctrl-group)::after {
+  :is(.map-message, .map-view-toggle, .map-zoom-controls, .map-provider-notice, .toolbox-toggle, .toolbox-panel, .closure-preview, .closure-placement-help, .closure-notice, :where(.closure-ghost > span, .closure-ghost small))::before,
+  :is(.map-view-toggle, .map-zoom-controls, .toolbox-toggle, .toolbox-panel, .closure-preview, .closure-placement-help)::after,
+  .map-page :is(.mapboxgl-ctrl-attrib, .maplibregl-ctrl-attrib)::before {
     display: none;
   }
 

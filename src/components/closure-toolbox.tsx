@@ -8,7 +8,7 @@ import type { FeatureCollection } from "geojson";
 import { closureFeatures, nearestRoad } from "@/lib/closure-placement";
 import type { RoadSnap, ScreenPoint } from "@/lib/closure-placement";
 import type { Road, RoadCollection } from "@/lib/types";
-import ToolboxGlassSurface from "./toolbox-glass-surface";
+import GlassSurface from "./glass-surface";
 
 type ClosureMap = Pick<MapboxMap | MapLibreMap, "getCanvas" | "getStyle" | "getZoom" | "addSource" | "addLayer" | "getLayer" | "removeLayer" | "removeSource" | "queryRenderedFeatures" | "project" | "fitBounds"> & {
   getSource: (id: string) => ReturnType<MapboxMap["getSource"]> | ReturnType<MapLibreMap["getSource"]>;
@@ -278,14 +278,14 @@ export default function ClosureToolbox({ map }: { map: ClosureMap }) {
   return (
     <>
       <div className="closure-toolbox" data-map-ui>
-        <ToolboxGlassSurface variant="button">
+        <GlassSurface variant="button">
         <button className="toolbox-toggle" type="button" aria-label="Closure toolbox" aria-expanded={open} aria-controls="closure-toolbox-panel" title="Closure toolbox" onClick={toggleToolbox}>
           <Icon kind="toolbox" />
           {closures.length ? <span className="toolbox-count">{closures.length}</span> : null}
         </button>
-        </ToolboxGlassSurface>
+        </GlassSurface>
         {open ? (
-          <ToolboxGlassSurface variant="panel">
+          <GlassSurface variant="panel">
           <section className="toolbox-panel" id="closure-toolbox-panel" aria-label="Closure toolbox">
             <div className="toolbox-heading"><div><span className="toolbox-eyebrow">PLAN ON THE MAP</span><h2>Toolbox</h2></div><button className="toolbox-close" type="button" aria-label="Close toolbox" onClick={toggleToolbox}><Icon kind="close" /></button></div>
             <button ref={placementButtonRef} className="closure-drag-tool" type="button" disabled={loadState !== "ready"} aria-pressed={armed} aria-describedby="closure-tool-help" onPointerDown={startDrag} onClick={(event) => {
@@ -299,7 +299,7 @@ export default function ClosureToolbox({ map }: { map: ClosureMap }) {
             <div className="toolbox-coverage"><span>Downtown coverage</span><button type="button" onClick={() => map.fitBounds([[-79.435, 43.63], [-79.345, 43.685]], { padding: { top: 100, bottom: 80, left: Math.min(340, map.getCanvas().clientWidth / 3), right: 60 }, duration: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 700 })}>Show area <span aria-hidden="true">↗</span></button></div>
             {closures.length ? <div className="closure-list"><span className="toolbox-eyebrow">PLACED CLOSURES · {closures.length}</span>{closures.map((road) => <button type="button" key={road.properties.id} aria-label={`Edit closure on ${road.properties.name}, segment ${road.properties.id}`} onClick={() => { cancelRef.current(); setDraft(road); }}><span className="closure-list-dot" /><span>{road.properties.name}<small>Segment {road.properties.id}</small></span><Icon kind="arrow" /></button>)}</div> : null}
           </section>
-          </ToolboxGlassSurface>
+          </GlassSurface>
         ) : null}
       </div>
       {draft ? (

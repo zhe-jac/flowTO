@@ -6,6 +6,7 @@ import { MAP_PALETTE } from "@/lib/map-theme";
 import { BOUNDARY_ATTRIBUTION, restrictCameraToToronto, TORONTO_BOUNDS, TORONTO_MIN_ZOOM } from "@/lib/city-boundary";
 import { TORONTO_DISTANT_MASK, TORONTO_FADE_COORDINATES, TORONTO_FADE_IMAGE, TORONTO_MASK_COLOR } from "@/lib/city-boundary-presentation";
 import ClosureToolbox from "./closure-toolbox";
+import MapControls from "./map-controls";
 
 const BUILDING_COLOR: ExpressionSpecification = [
   "interpolate",
@@ -34,7 +35,7 @@ export default function MapLibreCanvas() {
 
     async function initialize() {
       try {
-        const { Map, NavigationControl, setWorkerUrl } = await import("maplibre-gl");
+        const { Map, setWorkerUrl } = await import("maplibre-gl");
         if (disposed || !containerRef.current) return;
 
         setWorkerUrl(new URL("maplibre-gl/dist/maplibre-gl-worker.mjs", import.meta.url).toString());
@@ -55,7 +56,6 @@ export default function MapLibreCanvas() {
 
         mapRef.current = map;
         releaseBoundary = restrictCameraToToronto(map);
-        map.addControl(new NavigationControl({ visualizePitch: true }), "top-right");
         map.on("load", () => {
           if (disposed || !map) return;
           for (const layer of map.getStyle().layers) {
@@ -148,10 +148,7 @@ export default function MapLibreCanvas() {
   return (
     <main className="map-page" aria-label="Toronto street map">
       <div ref={containerRef} className="map-container" />
-      <div className="map-view-toggle" role="group" aria-label="Map view" data-map-ui>
-        <button type="button" aria-pressed={!is3D} disabled={!ready} onClick={() => changeView(false)}>2D</button>
-        <button type="button" aria-pressed={is3D} disabled={!ready} onClick={() => changeView(true)}>3D</button>
-      </div>
+      <MapControls map={ready ? mapRef.current : null} is3D={is3D} onViewChange={changeView} />
       {ready && mapRef.current ? <ClosureToolbox map={mapRef.current} /> : null}
       {status ? <p className="map-message" role="status">{status}</p> : null}
       {error ? (

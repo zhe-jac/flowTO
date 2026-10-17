@@ -6,7 +6,7 @@ import type LiquidGlass from "liquid-glass-react";
 
 const STILL = { x: 0, y: 0 };
 
-export default function ToolboxGlassSurface({ children, variant }: { children: ReactNode; variant: "button" | "panel" }) {
+export default function GlassSurface({ children, variant }: { children: ReactNode; variant: "button" | "panel" | "view" | "navigation" }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [allowed, setAllowed] = useState(false);
@@ -57,8 +57,8 @@ export default function ToolboxGlassSurface({ children, variant }: { children: R
             className="toolbox-liquid-lens"
             style={{ position: "absolute", top: "50%", left: "50%", width: size.width, height: size.height }}
             padding="0"
-            cornerRadius={variant === "button" ? 17 : 24}
-            displacementScale={variant === "button" ? 32 : 42}
+            cornerRadius={variant === "panel" ? 24 : 17}
+            displacementScale={variant === "panel" ? 42 : 32}
             blurAmount={0.125}
             saturation={125}
             aberrationIntensity={0.8}
