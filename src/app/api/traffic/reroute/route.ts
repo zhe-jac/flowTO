@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import { validateDisruption, type Disruption } from "@/lib/disruptions";
 import { buildPlan, scenariosFor, validateChoices } from "@/lib/traffic/rerouting";
 import type { TrafficData } from "@/lib/traffic/types";
+import { expandRoadDisruptions } from "@/lib/traffic/disruptions";
+import { validRoadExtent } from "@/lib/road-extent";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -29,10 +31,11 @@ export async function POST(request: Request) {
   inFlight++;
   try {
     const data: TrafficData = await (traffic ??= readFile(`${process.cwd()}/public/data/traffic.json`, "utf8").then(text => JSON.parse(text) as TrafficData));
-    const knownRoads = new Set(data.segments.map(s => s.id));
-    if (items.some(item => item.kind !== "event" && !knownRoads.has(item.roadId))) return NextResponse.json({ error: "A disruption references an unknown road." }, { status: 400 });
+    const roadCoordinates = new Map(data.segments.map(s => [s.id, s.coords]));
+    if (items.some(item => item.kind !== "event" && !validRoadExtent(item, id => roadCoordinates.get(id)))) return NextResponse.json({ error: "Choose a continuous road stretch from the available streets." }, { status: 400 });
+    const expanded = expandRoadDisruptions(items);
     // Overlapping restrictions reduce capacity once, using the strongest restriction.
-    const unique = items.filter((item, index) => item.kind === "event" || !items.some((other, j) => other.kind !== "event" && other.roadId === item.roadId && (other.restriction === "full-closure" && item.restriction !== "full-closure" || other.restriction === item.restriction && j < index)));
+    const unique = expanded.filter((item, index) => item.kind === "event" || !expanded.some((other, j) => other.kind !== "event" && other.roadId === item.roadId && (other.restriction === "full-closure" && item.restriction !== "full-closure" || other.restriction === item.restriction && j < index)));
     const scenarios = scenariosFor(data, unique, day, minutes);
     let plan = buildPlan(scenarios);
     if (scenarios.length) {
