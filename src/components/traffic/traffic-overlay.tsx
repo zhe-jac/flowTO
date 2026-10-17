@@ -15,7 +15,6 @@ import type { TrafficData, TrafficSegment } from "@/lib/traffic/types";
 import { FlowPathLayer } from "./flow-path-layer";
 import RoadPanel from "./road-panel";
 import TrafficControls from "./traffic-controls";
-import TrafficLegend from "./traffic-legend";
 const FLAT_DEPTH = { depthCompare: "always", depthWriteEnabled: false } as const;
 const TILTED_DEPTH = { depthCompare: "less-equal", depthWriteEnabled: false } as const;
 const OFFSET_EXTENSION = new PathStyleExtension({ offset: true });
@@ -267,7 +266,7 @@ export default function TrafficOverlay({ map, renderer, items, interacting }: Pr
     };
     const selectedSegment = data && selected !== null && !interacting ? data.segments[selected] : null;
     return (<div className="traffic-ui" data-interacting={interacting}>
-      {data ? <><TrafficControls clock={snapshot.clock} profile={data.profiles[snapshot.clock.day]} vehicles={snapshot.vehicles} closures={closed.size} onChange={updateClock}/>{!selectedSegment ? <TrafficLegend meta={data.meta}/> : null}</> : null}
+      {data ? <TrafficControls clock={snapshot.clock} profile={data.profiles[snapshot.clock.day]} vehicles={snapshot.vehicles} closures={closed.size} onChange={updateClock}/> : null}
       {selectedSegment && data ? <RoadPanel segment={selectedSegment} data={data} clock={snapshot.clock} closed={closed.has(selectedSegment.id)} onClose={() => setSelected(null)}/> : null}
       {!data && !error ? <p className="traffic-status" role="status">Loading typical traffic…</p> : null}
       {error ? <p className="traffic-status traffic-status-error" role="alert">{error} <button type="button" onClick={() => { setError(null); setRetry((value) => value + 1); }}>Retry</button></p> : null}

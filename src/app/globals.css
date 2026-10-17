@@ -966,11 +966,13 @@ button {
 
 .map-page :is(.mapboxgl-ctrl-attrib, .maplibregl-ctrl-attrib) {
   margin: 0 8px 6px 0;
-  padding: 3px 10px;
-  border-radius: 10px;
+  max-width: calc(100vw - 24px);
+  padding: 2px 7px;
+  border-radius: 8px;
   color: var(--ui-muted);
   font-family: inherit;
-  font-size: 10px;
+  font-size: 9px;
+  line-height: 14px;
 }
 
 .map-page :is(.mapboxgl-ctrl-attrib, .maplibregl-ctrl-attrib) a {
@@ -1116,7 +1118,7 @@ button {
 
 .traffic-controls-shell {
   position: absolute;
-  bottom: 32px;
+  bottom: 44px;
   left: 50%;
   width: min(740px, calc(100% - 180px));
   transform: translateX(-50%);
@@ -1572,7 +1574,7 @@ button {
 
 @media (max-width: 680px) {
   .traffic-controls-shell {
-    bottom: 30px;
+    bottom: 44px;
     width: calc(100% - 24px);
   }
 
