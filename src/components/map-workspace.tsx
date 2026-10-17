@@ -55,7 +55,7 @@ export default function MapWorkspace({ map, renderer }: { map: MapboxMap | MapLi
 
   return (
     <>
-      <WeatherPrecipitation weather={weather} night={theme === "night"} />
+      <WeatherPrecipitation map={map} weather={weather} night={theme === "night"} />
       <DisruptionToolbox map={map} onItemsChange={setItems} onInteractionChange={setInteracting} open={panel === "toolbox"} onOpenChange={openToolbox} suspended={panel === "weather"} />
       <WeatherMenu open={panel === "weather"} onOpenChange={openWeather} weather={weather} onChange={setWeather} />
       <TrafficOverlay map={map} renderer={renderer} items={items} interacting={interacting} onLightChange={setLight} buildingFade={buildingFade} />

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import GlassSurface from "./glass-surface";
 import { CLEAR_WEATHER, weatherIntensity, weatherLevel, weatherSummary, type WeatherState } from "@/lib/weather";
 
@@ -13,8 +13,17 @@ export default function WeatherMenu({ open, onOpenChange, weather, onChange }: {
   const panelRef = useRef<HTMLElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const id = useId();
+  const [reducedMotion, setReducedMotion] = useState(false);
   const active = weather.rain > 0 || weather.snow > 0;
   const close = () => { onOpenChange(false); triggerRef.current?.focus(); };
+
+  useEffect(() => {
+    const preference = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const update = () => setReducedMotion(preference.matches);
+    update();
+    preference.addEventListener("change", update);
+    return () => preference.removeEventListener("change", update);
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -45,7 +54,8 @@ export default function WeatherMenu({ open, onOpenChange, weather, onChange }: {
         <div className="weather-slider-scale" aria-hidden="true"><span>Off</span><span>Heavy</span></div>
       </div>)}
       <button className="weather-clear" type="button" disabled={!active} onClick={() => onChange(CLEAR_WEATHER)}>Clear weather</button>
-      <p className="weather-note">Mix rain and snow, or set both to zero for clear skies. Intensity is relative, not a measured forecast. Traffic estimates currently use dry-road assumptions.</p>
+      {weather.rain > 85 ? <p className="weather-note" role="status">{reducedMotion ? "Lightning paused: Reduce Motion is enabled." : "Lightning enabled in 3D views."}</p> : null}
+      <p className="weather-note">Mix rain and snow, or set both to zero for clear skies. Above 85% rain, occasional lightning appears in 3D. Intensity is relative, not a measured forecast. Traffic estimates currently use dry-road assumptions.</p>
     </section> : null}
   </div>;
 }
