@@ -20,7 +20,7 @@ export const MAP_NIGHT_PALETTE: Record<keyof typeof MAP_PALETTE, string> = {
   land: "#152536",
   water: "#0d2335",
   greenspace: "#19382f",
-  buildings: "#294359",
+  buildings: "#718fa8",
   roads: "#344d61",
   trunks: "#3b556a",
   motorways: "#48647a",

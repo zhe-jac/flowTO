@@ -16,7 +16,7 @@ type BoundaryMap = {
 };
 
 function nightBuildings(): ExpressionSpecification {
-  return ["interpolate", ["linear"], ["to-number", ["get", "render_height"], 6], 0, "#263b4e", 25, "#2e485f", 80, "#35536c", 200, "#3c607b", 350, "#4a718d"];
+  return ["interpolate", ["linear"], ["to-number", ["get", "render_height"], 6], 0, "#59778f", 25, "#65859f", 80, "#7092ad", 200, "#7ea1bc", 350, "#8db1ca"];
 }
 
 export function createMapLibreLighting(map: ThemeMap) {
@@ -30,7 +30,7 @@ export function createMapLibreLighting(map: ThemeMap) {
     if (layer.type === "fill") {
       const color = source === "water" ? palette.water : source === "park" || source === "landcover" ? palette.greenspace : source === "building" ? nightBuildings() : palette.land;
       add(layer.id, "fill-color", color);
-      if (source === "building") add(layer.id, "fill-outline-color", "#3c5a71");
+      if (source === "building") add(layer.id, "fill-outline-color", "#90afc5");
     }
     if (layer.type === "line") {
       if (source === "waterway") add(layer.id, "line-color", palette.water);
