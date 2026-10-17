@@ -12,14 +12,15 @@ import { createMapLighting } from "@/lib/map-lighting";
 import DisruptionToolbox from "./disruption-toolbox";
 import WeatherMenu from "./weather-menu";
 import WeatherPrecipitation from "./weather-precipitation";
-import { CLEAR_WEATHER, type WeatherState } from "@/lib/weather";
+import { useCurrentWeather } from "./use-current-weather";
 import { installBuildingFade, type BuildingFadeController } from "@/lib/building-fade-layer";
 
 const TrafficOverlay = dynamic(() => import("./traffic/traffic-overlay"), { ssr: false });
 
 export default function MapWorkspace({ map, renderer }: { map: MapboxMap | MapLibreMap; renderer: "mapbox" | "maplibre" }) {
   const [panel, setPanel] = useState<"toolbox" | "weather" | null>(null);
-  const [weather, setWeather] = useState<WeatherState>(CLEAR_WEATHER);
+  const [presentTime, setPresentTime] = useState(() => initialTrafficClock(window.location.search).rate.id === "live");
+  const conditions = useCurrentWeather(presentTime);
   const openToolbox = useCallback((open: boolean) => setPanel(open ? "toolbox" : null), []);
   const openWeather = useCallback((open: boolean) => setPanel(open ? "weather" : null), []);
   const [items, setItems] = useState<Disruption[]>([]);
@@ -55,10 +56,10 @@ export default function MapWorkspace({ map, renderer }: { map: MapboxMap | MapLi
 
   return (
     <>
-      <WeatherPrecipitation map={map} weather={weather} night={theme === "night"} />
+      <WeatherPrecipitation map={map} weather={conditions.weather} night={theme === "night"} smooth={conditions.mode === "current"} />
       <DisruptionToolbox map={map} onItemsChange={setItems} onInteractionChange={setInteracting} open={panel === "toolbox"} onOpenChange={openToolbox} suspended={panel === "weather"} />
-      <WeatherMenu open={panel === "weather"} onOpenChange={openWeather} weather={weather} onChange={setWeather} />
-      <TrafficOverlay map={map} renderer={renderer} items={items} interacting={interacting} onLightChange={setLight} buildingFade={buildingFade} />
+      <WeatherMenu open={panel === "weather"} onOpenChange={openWeather} weather={conditions.weather} onChange={conditions.manualWeather} mode={conditions.mode} reading={conditions.reading} status={conditions.status} presentTime={presentTime} onModeChange={conditions.chooseMode} onRefresh={conditions.refresh} />
+      <TrafficOverlay map={map} renderer={renderer} items={items} interacting={interacting} onLightChange={setLight} onPresentTimeChange={setPresentTime} buildingFade={buildingFade} />
     </>
   );
 }

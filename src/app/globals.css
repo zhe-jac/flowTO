@@ -341,6 +341,51 @@ button {
   font-weight: 600;
 }
 
+.weather-mode {
+  margin-top: 16px;
+}
+
+.weather-mode button {
+  flex: 1;
+}
+
+.weather-mode button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.weather-current-details {
+  display: grid;
+  gap: 5px;
+  margin: -10px 0 20px;
+  color: var(--ui-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.weather-current-details p {
+  margin: 0;
+}
+
+.weather-current-details a {
+  color: var(--ui-accent);
+  text-underline-offset: 3px;
+}
+
+.weather-current-details button {
+  float: right;
+  min-height: 28px;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--ui-accent);
+  font-weight: 600;
+}
+
+.weather-current-details button:disabled {
+  cursor: default;
+}
+
 .weather-slider-group + .weather-slider-group {
   margin-top: 20px;
 }

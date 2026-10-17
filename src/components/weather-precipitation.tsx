@@ -5,11 +5,11 @@ import type { WeatherState } from "@/lib/weather";
 import type { DisruptionMap } from "@/lib/disruption-map";
 import { lightningEnvelope, lightningPattern, nextLightningTime, stormStrength, weatherDepth } from "@/lib/weather-motion";
 
-export default function WeatherPrecipitation({ map, weather, night }: { map: Pick<DisruptionMap, "getPitch">; weather: WeatherState; night: boolean }) {
+export default function WeatherPrecipitation({ map, weather, night, smooth = false }: { map: Pick<DisruptionMap, "getPitch">; weather: WeatherState; night: boolean; smooth?: boolean }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const lastStrike = useRef(-Infinity);
-  const current = useRef({ ...weather, night });
-  current.current = { ...weather, night };
+  const current = useRef({ ...weather, night, smooth });
+  current.current = { ...weather, night, smooth };
   const active = weather.rain > 0 || weather.snow > 0;
 
   useEffect(() => {
@@ -20,6 +20,7 @@ export default function WeatherPrecipitation({ map, weather, night }: { map: Pic
     const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
     const particles = Array.from({ length: 220 }, () => ({ x: Math.random(), y: Math.random(), size: 0.5 + Math.random(), phase: Math.random() * Math.PI * 2 }));
     let width = 1, height = 1, frame = 0, last = 0, elapsed = 0;
+    let displayedRain = 0, displayedSnow = 0;
     let nextLightning = 0;
     let lightningStarted = -Infinity;
     let pattern = lightningPattern(1, 0.5);
@@ -45,9 +46,13 @@ export default function WeatherPrecipitation({ map, weather, night }: { map: Pic
       const seconds = last ? Math.min(0.1, (now - last) / 1000) : 1 / 30;
       last = now;
       elapsed += seconds;
-      const { rain, snow, night } = current.current;
+      const { rain: targetRain, snow: targetSnow, night, smooth } = current.current;
+      const blend = smooth ? 1 - Math.exp(-seconds / 0.3) : 1;
+      displayedRain += (targetRain - displayedRain) * blend;
+      displayedSnow += (targetSnow - displayedSnow) * blend;
+      const rain = displayedRain, snow = displayedSnow;
       const depth = weatherDepth(map.getPitch());
-      const storm = stormStrength(rain);
+      const storm = stormStrength(targetRain);
       const area = Math.min(1, Math.max(0.3, width * height / 1000000));
       const rainCount = Math.round(140 * rain / 100 * area);
       const snowCount = Math.round(80 * snow / 100 * area);

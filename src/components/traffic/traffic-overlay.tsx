@@ -66,6 +66,7 @@ type Props = {
     items: Disruption[];
     interacting: boolean;
     onLightChange: (light: SimulatorLight) => void;
+    onPresentTimeChange: (current: boolean) => void;
     buildingFade: BuildingFadeController | null;
 };
 function buildFlows(segments: TrafficSegment[]) {
@@ -81,12 +82,14 @@ function buildFlows(segments: TrafficSegment[]) {
     });
     return flows;
 }
-export default function TrafficOverlay({ map, renderer, items, interacting, onLightChange, buildingFade }: Props) {
+export default function TrafficOverlay({ map, renderer, items, interacting, onLightChange, onPresentTimeChange, buildingFade }: Props) {
     const [data, setData] = useState<TrafficData | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [retry, setRetry] = useState(0);
     const [selected, setSelected] = useState<number | null>(null);
     const [snapshot, setSnapshot] = useState<Snapshot>(() => ({ clock: initialTrafficClock(window.location.search), vehicles: 0 }));
+
+    useEffect(() => { onPresentTimeChange(snapshot.clock.rate.id === "live"); }, [snapshot.clock.rate.id, onPresentTimeChange]);
 
     const simulationDate = useMemo(() => dateAtNoon(snapshot.clock.date), [snapshot.clock.date]);
     const light = simulatorLight(snapshot.clock.minutes, simulationDate);
