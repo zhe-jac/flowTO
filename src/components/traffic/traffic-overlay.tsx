@@ -10,6 +10,7 @@ import type { DisruptionMap } from "@/lib/disruption-map";
 import { advanceClock, CLOCK_RATES, torontoNow, type ClockState } from "@/lib/traffic/clock";
 import { CLASS_WIDTHS, LEVEL_COLORS } from "@/lib/traffic/colors";
 import { closedRoadIds } from "@/lib/traffic/disruptions";
+import { continuousPulseOffset, PULSE_SPACING } from "@/lib/traffic/flow-motion";
 import { directionState, profileShare, vehiclesOnRoad } from "@/lib/traffic/model";
 import type { TrafficData, TrafficSegment } from "@/lib/traffic/types";
 import { FlowPathLayer } from "./flow-path-layer";
@@ -28,6 +29,7 @@ type Flow = {
     width: number;
     twoWay: boolean;
     local: boolean;
+    collector: boolean;
 };
 type Snapshot = {
     clock: ClockState;
@@ -49,7 +51,7 @@ function buildFlows(segments: TrafficSegment[]) {
         ][];
         const directions = segment.oneway === 0 ? [forward, [...forward].reverse()] : [segment.oneway === 1 ? forward : [...forward].reverse()];
         for (const path of directions)
-            flows.push({ index: flows.length, segment: index, path, width: CLASS_WIDTHS[segment.cls] ?? 3, twoWay: segment.oneway === 0, local: segment.cls === "Local" });
+            flows.push({ index: flows.length, segment: index, path, width: CLASS_WIDTHS[segment.cls] ?? 3, twoWay: segment.oneway === 0, local: segment.cls === "Local", collector: segment.cls.startsWith("Collector") });
     });
     return flows;
 }
@@ -117,7 +119,7 @@ export default function TrafficOverlay({ map, renderer, items, interacting }: Pr
         const flows = buildFlows(segments);
         const flowColors = new Uint8Array(flows.length * 4);
         const flowSpeeds = new Float32Array(flows.length);
-        const flowPhases = flows.map((flow) => ((Math.sin(flow.index * 12.9898) * 43758.5453) % 1 + 1) % 1);
+        const flowPhases = flows.map((flow) => (((Math.sin(flow.index * 12.9898) * 43758.5453) % 1 + 1) % 1) * PULSE_SPACING);
         const preference = window.matchMedia("(prefers-reduced-motion: reduce)");
         let disposed = false;
         let frame = 0;
@@ -132,7 +134,8 @@ export default function TrafficOverlay({ map, renderer, items, interacting }: Pr
         let paramVersion = 0;
         let vehicles = 0;
         let animationTime = 0;
-        let mainFlows = flows.filter((flow) => !flow.local);
+        let mainFlows = flows.filter((flow) => !flow.local && !flow.collector);
+        let collectorFlows = flows.filter((flow) => flow.collector);
         let localFlows = flows.filter((flow) => flow.local);
         let detach = () => { };
         const refreshState = () => {
@@ -141,7 +144,8 @@ export default function TrafficOverlay({ map, renderer, items, interacting }: Pr
             if (day === stateDay && Math.abs(minutes - stateMinutes) < 0.5 && stateClosures === closureKey)
                 return;
             if (stateClosures !== closureKey) {
-                mainFlows = flows.filter((flow) => !flow.local && !closed.has(segments[flow.segment].id));
+                mainFlows = flows.filter((flow) => !flow.local && !flow.collector && !closed.has(segments[flow.segment].id));
+                collectorFlows = flows.filter((flow) => flow.collector && !closed.has(segments[flow.segment].id));
                 localFlows = flows.filter((flow) => flow.local && !closed.has(segments[flow.segment].id));
             }
             stateMinutes = minutes;
@@ -155,14 +159,15 @@ export default function TrafficOverlay({ map, renderer, items, interacting }: Pr
             flows.forEach((flow, index) => {
                 const state = states[flow.segment];
                 const [r, g, b] = LEVEL_COLORS[state.level].road;
-                const alpha = flow.local ? 170 : 240;
+                const alpha = flow.local ? 155 : flow.collector ? 190 : 225;
                 const offset = index * 4;
                 if (flowColors[offset] !== r || flowColors[offset + 1] !== g || flowColors[offset + 2] !== b || flowColors[offset + 3] !== alpha) {
                     flowColors.set([r, g, b, alpha], offset);
                     colorsChanged = true;
                 }
-                const speed = Math.round(Math.max(0.2, state.speedKmh / 8) * 4) / 4;
+                const speed = Math.round(Math.max(0.25, state.speedKmh / 7) * 4) / 4;
                 if (flowSpeeds[index] !== speed) {
+                    flowPhases[index] = continuousPulseOffset(flowPhases[index], flowSpeeds[index], speed, animationTime);
                     flowSpeeds[index] = speed;
                     speedsChanged = true;
                 }
@@ -199,30 +204,33 @@ export default function TrafficOverlay({ map, renderer, items, interacting }: Pr
                 last = now;
                 clockRef.current = advanceClock(clockRef.current, seconds);
                 if (!preference.matches && clockRef.current.playing)
-                    animationTime = (animationTime + seconds) % 3600;
+                    animationTime += Math.min(seconds, 0.1);
                 if (now - lastState >= 250) {
                     refreshState();
                     lastState = now;
                 }
                 const zoom = map.getZoom();
                 const depth = map.getPitch() >= 5 ? TILTED_DEPTH : FLAT_DEPTH;
-                const widthScale = Math.min(1.5, Math.max(0.3, 2 ** ((zoom - 15.5) * 0.75)));
+                const widthScale = Math.min(1.25, Math.max(0.28, 2 ** ((zoom - 15.5) * 0.5)));
+                const collectorOpacity = Math.max(0, Math.min(1, (zoom - 12.8) / 1.0));
+                const localOpacity = Math.max(0, Math.min(1, (zoom - 14.2) / 1.0));
                 const layers: Layer[] = [];
                 const chosen = selectedRef.current;
                 if (chosen !== null && segments[chosen] && !latestRef.current.closed.has(segments[chosen].id))
-                    layers.push(new PathLayer<Flow>({ id: "traffic-selected", ...placement, parameters: depth, data: flows.filter((flow) => flow.segment === chosen), getPath: (flow) => flow.path, getColor: [31, 69, 97, 230], getWidth: (flow) => flow.width * (flow.twoWay ? 2.3 : 1) + 6, widthUnits: "pixels", widthScale, capRounded: true, jointRounded: true }));
-                const flowLayer = (id: string, layerData: Flow[], visible: boolean) => new FlowPathLayer<Flow>({
-                    id, ...placement, visible, parameters: depth, data: layerData,
+                    layers.push(new PathLayer<Flow>({ id: "traffic-selected", ...placement, parameters: depth, data: flows.filter((flow) => flow.segment === chosen), getPath: (flow) => flow.path, getColor: [79, 139, 177, 90], getWidth: (flow) => flow.width * (flow.twoWay ? 2.3 : 1) + 4, widthUnits: "pixels", widthScale, capRounded: true, jointRounded: true, antialiasing: true }));
+                const flowLayer = (id: string, layerData: Flow[], opacity: number) => new FlowPathLayer<Flow>({
+                    id, ...placement, visible: opacity > 0, opacity, parameters: depth, data: layerData,
                     getPath: (flow) => flow.path,
                     getColor: (flow) => { const offset = flow.index * 4; return [flowColors[offset], flowColors[offset + 1], flowColors[offset + 2], flowColors[offset + 3]]; },
                     getWidth: (flow) => flow.width,
                     getOffset: (flow) => flow.twoWay ? -0.6 : 0,
                     getFlowParams: (flow) => [flowSpeeds[flow.index], flowPhases[flow.index]],
-                    time: animationTime, arrowSpacing: 3.2, widthUnits: "pixels", widthScale, widthMinPixels: 1.5, capRounded: true, jointRounded: true,
-                    pickable: !latestRef.current.interacting, autoHighlight: !latestRef.current.interacting, highlightColor: [255, 255, 255, 70], extensions: [OFFSET_EXTENSION],
+                    time: animationTime, pulseSpacing: PULSE_SPACING, widthUnits: "pixels", widthScale, widthMinPixels: 1.1, widthMaxPixels: 8, capRounded: true, jointRounded: true, antialiasing: true,
+                    pickable: !latestRef.current.interacting && opacity > 0.2, autoHighlight: !latestRef.current.interacting, highlightColor: [224, 243, 255, 45], extensions: [OFFSET_EXTENSION],
+                    transitions: { getColor: preference.matches ? 0 : 650 },
                     updateTriggers: { getColor: colorVersion, getFlowParams: paramVersion },
                 });
-                layers.push(flowLayer("traffic-flow-local", localFlows, zoom >= 14.5), flowLayer("traffic-flow", mainFlows, true));
+                layers.push(flowLayer("traffic-flow-local", localFlows, localOpacity), flowLayer("traffic-flow-collectors", collectorFlows, collectorOpacity), flowLayer("traffic-flow", mainFlows, 1));
                 overlay.setProps({ layers });
                 if (now - lastUi >= 250) {
                     lastUi = now;
@@ -240,12 +248,13 @@ export default function TrafficOverlay({ map, renderer, items, interacting }: Pr
                 lastState = -Infinity;
                 lastUi = -Infinity;
                 if (!document.hidden) {
-                    last = performance.now();
                     frame = requestAnimationFrame(tick);
                 }
             };
-            const visibility = () => { cancelAnimationFrame(frame); clearTimeout(timer); if (!document.hidden)
-                redraw(); };
+            const visibility = () => { cancelAnimationFrame(frame); clearTimeout(timer); if (!document.hidden) {
+                last = performance.now();
+                redraw();
+            } };
             redrawRef.current = redraw;
             document.addEventListener("visibilitychange", visibility);
             preference.addEventListener("change", redraw);
