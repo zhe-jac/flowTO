@@ -18,6 +18,7 @@ import DisruptionMarkers from "./disruption-markers";
 import DisruptionScenes from "./disruption-scenes";
 import DisruptionEndpoints from "./disruption-endpoints";
 import { extentDetails } from "@/lib/road-extent";
+import { setBuildingFadeFocus } from "@/lib/building-fade";
 import { motion, type Transition, type Variants } from "motion/react";
 
 type Placement = { kind: DisruptionKind; position: Coordinate; point: ScreenPoint; road?: Road };
@@ -139,6 +140,7 @@ export default function DisruptionToolbox({ map, onItemsChange, onInteractionCha
     let clickStart: ScreenPoint | null = null;
     const cancel = () => {
       cancelAnimationFrame(frame);
+      setBuildingFadeFocus(canvas, null);
       dragRef.current = null;
       armedRef.current = null;
       keyboardRef.current = false;
@@ -154,6 +156,7 @@ export default function DisruptionToolbox({ map, onItemsChange, onInteractionCha
       const rect = canvas.getBoundingClientRect();
       const point = { x: client.x - rect.left, y: client.y - rect.top };
       const overControls = document.elementFromPoint(client.x, client.y)?.closest("[data-map-ui], .mapboxgl-ctrl, .maplibregl-ctrl");
+      setBuildingFadeFocus(canvas, !overControls && point.x >= 0 && point.y >= 0 && point.x <= rect.width && point.y <= rect.height ? point : null);
       let result: Placement | null = null;
       if (!overControls && point.x >= 0 && point.y >= 0 && point.x <= rect.width && point.y <= rect.height) {
         if (kind === "event") {
@@ -294,6 +297,7 @@ export default function DisruptionToolbox({ map, onItemsChange, onInteractionCha
     map.on("move", movedMap);
     return () => {
       cancelAnimationFrame(frame);
+      setBuildingFadeFocus(canvas, null);
       canvas.style.cursor = "";
       canvas.removeEventListener("pointerdown", down);
       canvas.removeEventListener("click", click);

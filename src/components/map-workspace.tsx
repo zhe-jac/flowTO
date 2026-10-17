@@ -9,15 +9,23 @@ import { initialTrafficClock } from "@/lib/traffic/clock";
 import { simulatorLight, type SimulatorLight } from "@/lib/daylight";
 import { createMapLighting } from "@/lib/map-lighting";
 import DisruptionToolbox from "./disruption-toolbox";
+import { installBuildingFade, type BuildingFadeController } from "@/lib/building-fade-layer";
 
 const TrafficOverlay = dynamic(() => import("./traffic/traffic-overlay"), { ssr: false });
 
 export default function MapWorkspace({ map, renderer }: { map: MapboxMap | MapLibreMap; renderer: "mapbox" | "maplibre" }) {
   const [items, setItems] = useState<Disruption[]>([]);
   const [interacting, setInteracting] = useState(false);
+  const [buildingFade, setBuildingFade] = useState<BuildingFadeController | null>(null);
   const [light, setLight] = useState<SimulatorLight>(() => simulatorLight(initialTrafficClock(window.location.search).minutes));
   const theme = light.theme;
   const lighting = useMemo(() => createMapLighting(map, renderer), [map, renderer]);
+
+  useEffect(() => {
+    const controller = installBuildingFade(map, renderer);
+    setBuildingFade(controller);
+    return () => controller.dispose();
+  }, [map, renderer]);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -40,7 +48,7 @@ export default function MapWorkspace({ map, renderer }: { map: MapboxMap | MapLi
   return (
     <>
       <DisruptionToolbox map={map} onItemsChange={setItems} onInteractionChange={setInteracting} />
-      <TrafficOverlay map={map} renderer={renderer} items={items} interacting={interacting} onLightChange={setLight} />
+      <TrafficOverlay map={map} renderer={renderer} items={items} interacting={interacting} onLightChange={setLight} buildingFade={buildingFade} />
     </>
   );
 }
