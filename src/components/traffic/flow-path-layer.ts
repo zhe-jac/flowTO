@@ -1,5 +1,6 @@
 import type { Accessor, DefaultProps } from "@deck.gl/core";
 import { PathLayer, type PathLayerProps } from "@deck.gl/layers";
+import { PULSE_SPACING } from "@/lib/traffic/flow-motion";
 
 type FlowProps<D> = {
   getFlowParams?: Accessor<D, [number, number]>;
@@ -26,7 +27,7 @@ const defaultProps: DefaultProps<FlowPathLayerProps<unknown>> = {
   ...PathLayer.defaultProps,
   getFlowParams: { type: "accessor", value: [1, 0] },
   time: 0,
-  pulseSpacing: 18,
+  pulseSpacing: PULSE_SPACING,
 };
 
 export class FlowPathLayer<D = unknown> extends PathLayer<D, FlowProps<D>> {
@@ -52,8 +53,8 @@ if (!bool(picking.isActive)) {
   float head = 1.0 - smoothstep(0.55, 0.68, cycle);
   float pulse = trail * head * center;
   float sheen = exp(-pow((vPathPosition.x + 0.32) * 4.5, 2.0));
-  vec3 highlight = vec3(0.91, 0.96, 1.0);
-  vec3 color = mix(fragColor.rgb, highlight, 0.06 * sheen + 0.4 * pulse);
+  vec3 highlight = vec3(0.98, 0.99, 1.0);
+  vec3 color = mix(fragColor.rgb, highlight, 0.06 * sheen + 0.55 * pulse);
   fragColor = vec4(color, fragColor.a * edge * (0.82 + 0.12 * pulse));
 }
 `,
@@ -70,7 +71,7 @@ if (!bool(picking.isActive)) {
 
   draw(options: Parameters<PathLayer<D, FlowProps<D>>["draw"]>[0]) {
     for (const model of this.getModels()) {
-      model.shaderInputs.setProps({ flow: { time: this.props.time ?? 0, spacing: this.props.pulseSpacing ?? 18 } });
+      model.shaderInputs.setProps({ flow: { time: this.props.time ?? 0, spacing: this.props.pulseSpacing ?? PULSE_SPACING } });
     }
     super.draw(options);
   }

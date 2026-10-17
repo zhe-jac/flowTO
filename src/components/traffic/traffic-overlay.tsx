@@ -11,6 +11,7 @@ import { advanceClock, CLOCK_RATES, torontoNow, type ClockState } from "@/lib/tr
 import { CLASS_WIDTHS, LEVEL_COLORS } from "@/lib/traffic/colors";
 import { closedRoadIds } from "@/lib/traffic/disruptions";
 import { continuousPulseOffset, PULSE_SPACING } from "@/lib/traffic/flow-motion";
+import { createTrafficViewport } from "@/lib/traffic/viewport";
 import { directionState, profileShare, vehiclesOnRoad } from "@/lib/traffic/model";
 import type { TrafficData, TrafficSegment } from "@/lib/traffic/types";
 import { FlowPathLayer } from "./flow-path-layer";
@@ -35,7 +36,7 @@ type Snapshot = {
     clock: ClockState;
     vehicles: number;
 };
-type TrafficMap = DisruptionMap & Pick<MapboxMap | MapLibreMap, "addControl" | "removeControl">;
+type TrafficMap = DisruptionMap & Pick<MapboxMap | MapLibreMap, "addControl" | "removeControl" | "getBounds">;
 type Props = {
     map: TrafficMap;
     renderer: "mapbox" | "maplibre";
@@ -117,6 +118,9 @@ export default function TrafficOverlay({ map, renderer, items, interacting }: Pr
             return;
         const segments = data.segments;
         const flows = buildFlows(segments);
+        const viewport = createTrafficViewport(segments);
+        const flowsBySegment: Flow[][] = segments.map(() => []);
+        for (const flow of flows) flowsBySegment[flow.segment].push(flow);
         const flowColors = new Uint8Array(flows.length * 4);
         const flowSpeeds = new Float32Array(flows.length);
         const flowPhases = flows.map((flow) => (((Math.sin(flow.index * 12.9898) * 43758.5453) % 1 + 1) % 1) * PULSE_SPACING);
@@ -134,20 +138,18 @@ export default function TrafficOverlay({ map, renderer, items, interacting }: Pr
         let paramVersion = 0;
         let vehicles = 0;
         let animationTime = 0;
-        let mainFlows = flows.filter((flow) => !flow.local && !flow.collector);
-        let collectorFlows = flows.filter((flow) => flow.collector);
-        let localFlows = flows.filter((flow) => flow.local);
+        let mainFlows: Flow[] = [];
+        let collectorFlows: Flow[] = [];
+        let localFlows: Flow[] = [];
+        let visibleSegments: number[] | null = null;
+        let visibleClosures: string | null = null;
+        let viewDirty = true;
         let detach = () => { };
         const refreshState = () => {
             const { minutes, day } = clockRef.current;
             const { closed, closureKey } = latestRef.current;
             if (day === stateDay && Math.abs(minutes - stateMinutes) < 0.5 && stateClosures === closureKey)
                 return;
-            if (stateClosures !== closureKey) {
-                mainFlows = flows.filter((flow) => !flow.local && !flow.collector && !closed.has(segments[flow.segment].id));
-                collectorFlows = flows.filter((flow) => flow.collector && !closed.has(segments[flow.segment].id));
-                localFlows = flows.filter((flow) => flow.local && !closed.has(segments[flow.segment].id));
-            }
             stateMinutes = minutes;
             stateDay = day;
             stateClosures = closureKey;
@@ -210,6 +212,26 @@ export default function TrafficOverlay({ map, renderer, items, interacting }: Pr
                     lastState = now;
                 }
                 const zoom = map.getZoom();
+                const bounds = viewDirty || visibleClosures !== latestRef.current.closureKey ? map.getBounds() : null;
+                if (bounds) {
+                    viewDirty = false;
+                    const next = viewport.select([bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()]);
+                    if (next !== visibleSegments || visibleClosures !== latestRef.current.closureKey) {
+                        visibleSegments = next;
+                        visibleClosures = latestRef.current.closureKey;
+                        mainFlows = [];
+                        collectorFlows = [];
+                        localFlows = [];
+                        for (const index of next) {
+                            if (latestRef.current.closed.has(segments[index].id)) continue;
+                            for (const flow of flowsBySegment[index]) {
+                                if (flow.local) localFlows.push(flow);
+                                else if (flow.collector) collectorFlows.push(flow);
+                                else mainFlows.push(flow);
+                            }
+                        }
+                    }
+                }
                 const depth = map.getPitch() >= 5 ? TILTED_DEPTH : FLAT_DEPTH;
                 const widthScale = Math.min(1.25, Math.max(0.28, 2 ** ((zoom - 15.5) * 0.5)));
                 const collectorOpacity = Math.max(0, Math.min(1, (zoom - 12.8) / 1.0));
@@ -217,7 +239,7 @@ export default function TrafficOverlay({ map, renderer, items, interacting }: Pr
                 const layers: Layer[] = [];
                 const chosen = selectedRef.current;
                 if (chosen !== null && segments[chosen] && !latestRef.current.closed.has(segments[chosen].id))
-                    layers.push(new PathLayer<Flow>({ id: "traffic-selected", ...placement, parameters: depth, data: flows.filter((flow) => flow.segment === chosen), getPath: (flow) => flow.path, getColor: [79, 139, 177, 90], getWidth: (flow) => flow.width * (flow.twoWay ? 2.3 : 1) + 4, widthUnits: "pixels", widthScale, capRounded: true, jointRounded: true, antialiasing: true }));
+                    layers.push(new PathLayer<Flow>({ id: "traffic-selected", ...placement, parameters: depth, data: flowsBySegment[chosen], getPath: (flow) => flow.path, getColor: [79, 139, 177, 90], getWidth: (flow) => flow.width * (flow.twoWay ? 2.3 : 1) + 4, widthUnits: "pixels", widthScale, capRounded: true, jointRounded: true, antialiasing: true }));
                 const flowLayer = (id: string, layerData: Flow[], opacity: number) => new FlowPathLayer<Flow>({
                     id, ...placement, visible: opacity > 0, opacity, parameters: depth, data: layerData,
                     getPath: (flow) => flow.path,
@@ -247,6 +269,7 @@ export default function TrafficOverlay({ map, renderer, items, interacting }: Pr
                 clearTimeout(timer);
                 lastState = -Infinity;
                 lastUi = -Infinity;
+                viewDirty = true;
                 if (!document.hidden) {
                     frame = requestAnimationFrame(tick);
                 }
