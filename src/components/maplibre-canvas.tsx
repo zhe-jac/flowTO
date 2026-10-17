@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { ExpressionSpecification, Map as MapLibreMap } from "maplibre-gl";
 import { MAP_PALETTE } from "@/lib/map-theme";
-import { BOUNDARY_ATTRIBUTION, OUTSIDE_TORONTO_MASK, restrictCameraToToronto, TORONTO_BOUNDARY, TORONTO_BOUNDS, TORONTO_MIN_ZOOM } from "@/lib/city-boundary";
+import { BOUNDARY_ATTRIBUTION, restrictCameraToToronto, TORONTO_BOUNDS, TORONTO_MIN_ZOOM } from "@/lib/city-boundary";
+import { TORONTO_DISTANT_MASK, TORONTO_FADE_COORDINATES, TORONTO_FADE_IMAGE, TORONTO_MASK_COLOR } from "@/lib/city-boundary-presentation";
 
 const BUILDING_COLOR: ExpressionSpecification = [
   "interpolate",
@@ -73,7 +74,7 @@ export default function MapLibreCanvas() {
             "source-layer": "building",
             type: "fill-extrusion",
             minzoom: 14,
-            filter: ["all", ["!=", ["get", "hide_3d"], true], ["within", TORONTO_BOUNDARY.geometry]],
+            filter: ["!=", ["get", "hide_3d"], true],
             layout: { visibility: "none" },
             paint: {
               "fill-extrusion-color": BUILDING_COLOR,
@@ -83,19 +84,19 @@ export default function MapLibreCanvas() {
               "fill-extrusion-vertical-gradient": true,
             },
           }, labelLayer?.id);
-          map.addSource("toronto-boundary", { type: "geojson", data: TORONTO_BOUNDARY, attribution: BOUNDARY_ATTRIBUTION, tolerance: 0 });
-          map.addSource("outside-toronto", { type: "geojson", data: OUTSIDE_TORONTO_MASK, tolerance: 0 });
+          map.addSource("outside-toronto", { type: "geojson", data: TORONTO_DISTANT_MASK, attribution: BOUNDARY_ATTRIBUTION, tolerance: 0 });
+          map.addSource("toronto-boundary-fade", { type: "image", url: TORONTO_FADE_IMAGE, coordinates: TORONTO_FADE_COORDINATES });
           map.addLayer({
             id: "outside-toronto-mask",
             type: "fill",
             source: "outside-toronto",
-            paint: { "fill-color": "#dfeef7", "fill-opacity": 0.98 },
+            paint: { "fill-color": TORONTO_MASK_COLOR, "fill-opacity": 1, "fill-antialias": false },
           });
           map.addLayer({
-            id: "toronto-city-outline",
-            type: "line",
-            source: "toronto-boundary",
-            paint: { "line-color": "#78a9c8", "line-width": 1.5, "line-opacity": 0.85 },
+            id: "toronto-boundary-fade",
+            type: "raster",
+            source: "toronto-boundary-fade",
+            paint: { "raster-fade-duration": 0, "raster-resampling": "linear" },
           });
           setReady(true);
           setStatus("");

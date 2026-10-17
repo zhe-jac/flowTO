@@ -42,7 +42,7 @@ The initial demo will cover **one well-developed Toronto area**, using real road
 ### Available now
 
 - A full-screen Toronto map with pan, zoom, attribution, and a small 2D/3D toggle.
-- Toronto-only navigation using the City's official Regional Municipal Boundary: camera bounds, a city-scale minimum zoom, and a polygon check that keeps the map centre inside Toronto. The city outline is drawn and surrounding areas are masked; Mapbox also clips outside buildings, trees, and labels. Both renderers apply the navigation restriction in 2D and 3D.
+- Toronto-only navigation using the City's official Regional Municipal Boundary: camera bounds, a city-scale minimum zoom, and a polygon check that keeps the map centre inside Toronto. Surrounding streets gradually fade into a sky-blue background beyond the boundary, without a hard outline. Both renderers share the fade and apply the navigation restriction in 2D and 3D.
 - **Mapbox Standard preview** when `NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN` is configured: day lighting and built-in 3D buildings, facades, landmarks, and trees where available. The 3D button enables these objects and tilts the camera; 2D hides them and returns to a flat view.
 - A light sky-blue sandbox theme: cool off-white land, brighter blue water, pale blue buildings, and soft mint greenspace. Business/POI labels, landmark icons, and indoor labels are hidden; street, place, and transit labels remain visible. The palette and Mapbox settings live in `src/lib/map-theme.ts`.
 - **MapLibre/OpenFreeMap fallback** when no token is configured: the existing coloured map remains available with height-based building extrusions. A small notice explains how to enable Mapbox.
@@ -175,7 +175,7 @@ Toronto datasets will be sourced from [City of Toronto Open Data](https://open.t
 | Midblock speed and volume counts | Additional baseline checks where suitable measurements exist |
 | Neighbourhood population and employment data | Optional inputs to synthetic travel demand; document gaps and fallback weights |
 | City boundaries, wards, and neighbourhoods | Geographic context and impact summaries where useful |
-| [Regional Municipal Boundary](https://open.toronto.ca/dataset/regional-municipal-boundary/) | Official City of Toronto shape for navigation constraints, outside masking, and the city outline; bundled with source metadata |
+| [Regional Municipal Boundary](https://open.toronto.ca/dataset/regional-municipal-boundary/) | Official City of Toronto shape for navigation constraints and the soft outside fade; bundled with source metadata |
 | Selected venues and destinations | Event access and journey examples; identify the source or label manually selected inputs |
 | Mapbox Standard | Optional basemap, buildings, facades, lighting, and 3D objects; public access token required |
 | OpenStreetMap via OpenFreeMap | Fallback basemap and building geometry/heights where available; preserve required attribution |
@@ -219,7 +219,7 @@ Mapbox access is associated with your account and subject to its [usage and pric
 | `pnpm build` | Create a production build |
 | `pnpm start` | Serve the production build |
 | `pnpm data:build` | Download/cache Toronto Centreline and rebuild the selectable road extract and source metadata |
-| `pnpm data:boundary` | Download/cache the official WGS84 Toronto municipal boundary and rebuild the bundled GeoJSON and metadata |
+| `pnpm data:boundary` | Download/cache the official WGS84 Toronto municipal boundary and rebuild the bundled GeoJSON, metadata, and soft fade image |
 | `pnpm test` | Test city membership, outside masking, camera constraints, scenario restoration, and closure state |
 | `pnpm check` | Run TypeScript checks |
 
@@ -231,7 +231,7 @@ MAP_BOUNDS='-79.435,43.63,-79.345,43.685' corepack pnpm data:build
 
 The extract includes segments with a vertex inside those bounds; it is a display dataset, not a validated routing graph. Generated source metadata is in `public/data/roads-metadata.json`. Remove the cached `data/raw/centreline.geojson` when you want the next build to download a fresh source snapshot.
 
-The city boundary is bundled in `src/lib/data/toronto-boundary.json`, with provenance in `public/data/toronto-boundary-metadata.json`. Its build script converts the City's WGS84 shapefile and retains the full boundary at six decimal places. Remove `data/raw/toronto-boundary.zip` before rebuilding to fetch a fresh source archive. The boundary restricts the map camera and presentation; it does not turn the separate downtown road extract into a citywide routing network.
+The city boundary is bundled in `src/lib/data/toronto-boundary.json`, with provenance in `public/data/toronto-boundary-metadata.json`. Its build script converts the City's WGS84 shapefile and retains the full boundary at six decimal places. `scripts/build-city-fade.ts` generates a georeferenced transparency image at `public/data/toronto-boundary-fade.png`, with placement in `src/lib/data/toronto-boundary-fade.json`. The fade uses a 900 m outward buffer and a 300 m Gaussian blur, keeping city detail clear while gradually obscuring the surrounding area. Generation runs offline; geometry buffering and image processing are not included in the browser bundle. Remove `data/raw/toronto-boundary.zip` before rebuilding to fetch a fresh source archive. The boundary restricts the map camera and presentation; it does not turn the separate downtown road extract into a citywide routing network.
 
 Gemini, optional database storage, GTFS processing, routing, and simulation are not wired up yet. Their dependencies and configuration will be added with those features.
 

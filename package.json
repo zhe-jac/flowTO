@@ -11,7 +11,7 @@
     "check": "tsc --noEmit",
     "test": "tsx --test src/lib/*.test.ts",
     "data:build": "tsx scripts/build-roads.ts",
-    "data:boundary": "tsx scripts/build-city-boundary.ts"
+    "data:boundary": "tsx scripts/build-city-boundary.ts && tsx scripts/build-city-fade.ts"
   },
   "dependencies": {
     "mapbox-gl": "^3.33.0",
@@ -21,6 +21,7 @@
     "react-dom": "^19.2.0"
   },
   "devDependencies": {
+    "@turf/buffer": "^7.4.0",
     "@types/geojson": "^7946.0.16",
     "@types/node": "^22.0.0",
     "@types/react": "^19.2.0",
@@ -28,6 +29,7 @@
     "@types/shapefile": "^0.6.4",
     "fflate": "^0.8.3",
     "shapefile": "^0.6.6",
+    "sharp": "^0.35.5",
     "tsx": "^4.20.0",
     "typescript": "^5.9.0"
   }
