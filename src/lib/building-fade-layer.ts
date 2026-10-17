@@ -1,6 +1,6 @@
 import type { CustomRenderMethodInput } from "maplibre-gl";
 import type { DisruptionMap } from "./disruption-map";
-import { BUILDING_FADE_FOCUS_EVENT, BUILDING_FADE_RADIUS, buildingFadeGeometry, buildingFadeStrength, getBuildingFadeFocus, invertFadeMatrix, localFadeMatrix } from "./building-fade";
+import { BUILDING_FADE_FOCUS_EVENT, BUILDING_FADE_RADIUS, BUILDING_FADE_PASSIVE_WEIGHT, BUILDING_FADE_SCREEN_GLSL, buildingFadeGeometry, buildingFadeStrength, getBuildingFadeFocus, invertFadeMatrix, localFadeMatrix } from "./building-fade";
 import type { FadePoint, FadeRoad } from "./building-fade";
 
 const CAPTURE_ID = "building-fade-underlay";
@@ -33,12 +33,15 @@ const ROAD_FRAGMENT = `#version 300 es
 precision highp float;
 uniform sampler2D u_underlay;
 uniform vec2 u_framebuffer;
+uniform vec2 u_viewport;
 uniform float u_strength;
 in float v_across;
 in float v_visibility;
 out vec4 color;
+${BUILDING_FADE_SCREEN_GLSL}
 void main() {
-  float alpha = u_strength*v_visibility*(1.-smoothstep(.25,1.,abs(v_across)));
+  vec2 screen = vec2(gl_FragCoord.x/u_framebuffer.x,1.-gl_FragCoord.y/u_framebuffer.y)*u_viewport;
+  float alpha = u_strength*v_visibility*(1.-smoothstep(.25,1.,abs(v_across)))*buildingFadeScreenMask(screen,u_viewport);
   if (alpha < .002) discard;
   vec3 base = texture(u_underlay,gl_FragCoord.xy/u_framebuffer).rgb;
   color = vec4(base*alpha,alpha);
@@ -292,7 +295,7 @@ export function installBuildingFade(map: DisruptionMap, renderer: "mapbox" | "ma
         gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
         if (uploaded !== geometry) { gl.bufferData(gl.ARRAY_BUFFER, geometry, gl.STATIC_DRAW); uploaded = geometry; }
         if (geometry.length) {
-          common(roadProgram, strength);
+          common(roadProgram, strength * BUILDING_FADE_PASSIVE_WEIGHT);
           gl.uniform1f(uniform(gl, roadProgram, "u_zoom"), map.getZoom());
           gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, geometry.length / 6);
         }
@@ -340,6 +343,7 @@ export function installBuildingFade(map: DisruptionMap, renderer: "mapbox" | "ma
   } catch (error) { fail(error); }
 
   return {
+    getFocus: (): [number, number, number] => [lastFocus.x, lastFocus.y, failed || disposed ? 0 : focusOpacity],
     setRoads: (next: readonly FadeRoad[]) => { if (disposed) return; roads = next; updateGeometry(); map.triggerRepaint(); },
     dispose: () => {
       disposed = true;

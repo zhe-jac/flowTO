@@ -26,6 +26,7 @@ import { comparisonImpacts } from "@/lib/traffic/comparison";
 import { useRerouting } from "./use-rerouting";
 import { buildingFadeStrength } from "@/lib/building-fade";
 import type { BuildingFadeController } from "@/lib/building-fade-layer";
+import { BuildingFadeExtension } from "./building-fade-extension";
 const FLAT_DEPTH = { depthCompare: "always", depthWriteEnabled: false } as const;
 const TILTED_DEPTH = { depthCompare: "less-equal", depthWriteEnabled: false } as const;
 const OCCLUDED_DEPTH = { depthCompare: "greater", depthWriteEnabled: false } as const;
@@ -357,6 +358,7 @@ export default function TrafficOverlay({ map, renderer, items, interacting, onLi
             const overlay = new Overlay({ interleaved: true, pickingRadius: 8, onClick: roadPick, getCursor: ({ isHovering, isDragging }) => latestRef.current.interacting ? "crosshair" : isDragging ? "grabbing" : isHovering ? "pointer" : "grab", layers: [], onError: () => setError("Traffic rendering is unavailable. The map and disruption tools are still available.") });
             const placement = renderer === "mapbox" ? { slot: "middle" as const } : { beforeId: "outside-toronto-mask" };
             const fadePlacement = renderer === "mapbox" ? { slot: "top" as const, beforeId: "toronto-road-labels" } : { beforeId: map.getStyle()?.layers?.find(layer => layer.type === "symbol")?.id };
+            const fadeExtension = buildingFade ? new BuildingFadeExtension({ canvas: map.getCanvas(), getFocus: buildingFade.getFocus }) : null;
             detach = () => { try {
                 map.removeControl(overlay as never);
             }
@@ -463,8 +465,8 @@ export default function TrafficOverlay({ map, renderer, items, interacting, onLi
                 if (visiblePlainPieces.length) layers.push(impactLayer("traffic-flow-impact", visiblePlainPieces, false));
                 if (visibleBoldPieces.length) layers.push(impactLayer("traffic-flow-highlight", visibleBoldPieces, true));
                 const fadeOpacity = buildingFade ? buildingFadeStrength(map.getPitch()) : 0;
-                if (fadeOpacity > 0) {
-                    const throughBuildings = layers.map(layer => layer.clone({ id: `${layer.id}-through-buildings`, ...fadePlacement, parameters: OCCLUDED_DEPTH, opacity: (layer.props.opacity ?? 1) * fadeOpacity }));
+                if (fadeOpacity > 0 && fadeExtension) {
+                    const throughBuildings = layers.map(layer => layer.clone({ id: `${layer.id}-through-buildings`, ...fadePlacement, parameters: OCCLUDED_DEPTH, opacity: (layer.props.opacity ?? 1) * fadeOpacity, pickable: false, autoHighlight: false, extensions: [...(layer.props.extensions ?? []), fadeExtension] }));
                     layers.push(...throughBuildings);
                 }
                 overlay.setProps({ layers });

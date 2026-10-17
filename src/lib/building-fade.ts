@@ -4,6 +4,14 @@ export type FadePoint = { x: number; y: number };
 export type FadeRoad = { coords: number[][]; cls: string };
 export const BUILDING_FADE_FOCUS_EVENT = "disruption-fade-focus";
 export const BUILDING_FADE_RADIUS = 88;
+export const BUILDING_FADE_PASSIVE_WEIGHT = 0.6;
+export const BUILDING_FADE_SCREEN_GLSL = `
+float buildingFadeScreenMask(vec2 screen, vec2 viewport) {
+  vec2 radius = min(viewport * vec2(.28,.30), vec2(320.,240.));
+  float distanceFromCenter = length((screen-viewport*vec2(.5,.55))/max(radius,vec2(1.)));
+  return 1.-smoothstep(.35,1.,distanceFromCenter);
+}
+`;
 const focusByCanvas = new WeakMap<HTMLCanvasElement, FadePoint | null>();
 export const FADE_ORIGIN = mercatorPosition([-79.3832, 43.6532]);
 
@@ -18,9 +26,9 @@ export function buildingFadeStrength(pitch: number) {
 }
 
 export function fadeRoadVisibility(roadClass: string) {
-  if (roadClass === "Local") return { minZoom: 14.2, width: 13 };
-  if (/Collector/.test(roadClass)) return { minZoom: 12.8, width: 16 };
-  return { minZoom: 10, width: 20 };
+  if (roadClass === "Local") return { minZoom: 14.2, width: 7 };
+  if (/Collector/.test(roadClass)) return { minZoom: 12.8, width: 9 };
+  return { minZoom: 10, width: 11 };
 }
 
 export function buildingFadeGeometry(roads: readonly FadeRoad[], zoom = Infinity) {
