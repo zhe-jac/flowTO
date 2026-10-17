@@ -1,0 +1,14 @@
+{
+  "source": "City of Toronto Centreline",
+  "sourceUrl": "https://open.toronto.ca/dataset/toronto-centreline-tcl/",
+  "licence": "Open Government Licence – Toronto",
+  "builtAt": "2026-10-17T05:17:38.468Z",
+  "bounds": [
+    -79.435,
+    43.63,
+    -79.345,
+    43.685
+  ],
+  "segmentCount": 5659,
+  "traffic": "Illustrative values only. No traffic measurements or simulation."
+}

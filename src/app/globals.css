@@ -1,0 +1,126 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: sans-serif;
+  background: #edf5fa;
+}
+
+.map-page,
+.map-container {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.map-message {
+  position: absolute;
+  z-index: 1;
+  top: 72px;
+  left: 16px;
+  max-width: min(420px, calc(100% - 80px));
+  margin: 0;
+  padding: 12px 16px;
+  border: 1px solid #d0e3ef;
+  border-radius: 4px;
+  background: #f9fcff;
+  color: #36566d;
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.map-error {
+  border-color: #d4aca1;
+}
+
+.map-view-toggle {
+  position: absolute;
+  z-index: 1;
+  top: 12px;
+  left: 12px;
+  display: flex;
+  gap: 3px;
+  padding: 4px;
+  border: 1px solid #d0e3ef;
+  border-radius: 5px;
+  background: #f9fcff;
+  box-shadow: 0 1px 5px #356a8c16;
+}
+
+.map-view-toggle button {
+  padding: 8px 13px;
+  border: 0;
+  border-radius: 3px;
+  background: #f9fcff;
+  color: #36566d;
+  font: 600 13px sans-serif;
+  cursor: pointer;
+}
+
+.map-view-toggle button[aria-pressed="true"] {
+  background: #c3e4fa;
+  color: #234f70;
+}
+
+.map-view-toggle button:disabled {
+  opacity: 0.45;
+  cursor: wait;
+}
+
+.map-view-toggle button:focus-visible {
+  outline: 2px solid #4384b1;
+  outline-offset: 2px;
+}
+
+.map-error p {
+  margin: 0 0 8px;
+}
+
+.map-error button {
+  padding: 6px 10px;
+  border: 1px solid #bdd6e8;
+  border-radius: 3px;
+  background: #edf6fc;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.map-provider-notice {
+  position: absolute;
+  z-index: 1;
+  bottom: 40px;
+  left: 16px;
+  width: min(380px, calc(100% - 32px));
+  padding: 12px 16px;
+  border: 1px solid #d0e3ef;
+  border-radius: 4px;
+  background: #f7fbff;
+  color: #36566d;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.map-provider-notice p {
+  margin: 6px 0;
+}
+
+.map-provider-notice code {
+  overflow-wrap: anywhere;
+  font-size: 11px;
+}
+
+.map-provider-notice a {
+  color: #28628f;
+  text-underline-offset: 3px;
+}

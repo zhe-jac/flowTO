@@ -1,0 +1,34 @@
+{
+  "name": "toronto-traffic-sandbox",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@9.15.9",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "check": "tsc --noEmit",
+    "test": "tsx --test src/lib/*.test.ts",
+    "data:build": "tsx scripts/build-roads.ts",
+    "data:boundary": "tsx scripts/build-city-boundary.ts"
+  },
+  "dependencies": {
+    "mapbox-gl": "^3.33.0",
+    "maplibre-gl": "^6.14.0",
+    "next": "^16.4.2",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@types/geojson": "^7946.0.16",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@types/shapefile": "^0.6.4",
+    "fflate": "^0.8.3",
+    "shapefile": "^0.6.6",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0"
+  }
+}

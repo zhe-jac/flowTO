@@ -1,0 +1,16 @@
+{
+  "name": "City of Toronto",
+  "source": "City of Toronto Regional Municipal Boundary",
+  "sourceUrl": "https://open.toronto.ca/dataset/regional-municipal-boundary/",
+  "licence": "Open Government Licence – Toronto",
+  "datasetApi": "https://ckan0.cf.opendata.inter.prod-toronto.ca/api/3/action/package_show?id=regional-municipal-boundary",
+  "builtAt": "2026-10-17T05:58:02.892Z",
+  "bounds": [
+    -79.639268,
+    43.581005,
+    -79.115246,
+    43.855466
+  ],
+  "polygons": 1,
+  "vertices": 8091
+}

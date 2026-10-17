@@ -3,7 +3,7 @@
 **Test how Toronto's road closures, construction, and events affect the people moving through the city.** Create a scenario, inspect car and TTC impacts, compare alternatives, and share the result on an interactive 2D or 3D map.
 
 > Planned for Hack the Valley 2026 and the **Hack the Valley x School of Cities** civic-tech track.
-> **Status: planning.** This repository currently contains project documentation; the app, data pipeline, and setup scripts have not been implemented. Features below describe the intended product.
+> **Status: base map with 2D/3D views and a Mapbox Standard preview.** The current app is a full-screen Toronto street map with pan, zoom, attribution, and a small 2D/3D toggle. The workspace, road overlays, closure tools, traffic animation, and sharing have been removed so features can be introduced individually. Routing, simulation, and TTC analysis remain planned.
 > This README reflects the revised product direction. [ROADMAP.md](ROADMAP.md) contains the earlier implementation plan and still needs to be reconciled with this scope, especially TTC support and prototype priorities.
 
 ## Why
@@ -38,6 +38,23 @@ The common workflow is **create → inspect → compare → share**. Manual tool
 ## First prototype
 
 The initial demo will cover **one well-developed Toronto area**, using real road and TTC geography. Citywide mapping is the longer-term setting; citywide simulation is a performance and data goal, not a requirement for the first demo.
+
+### Available now
+
+- A full-screen Toronto map with pan, zoom, attribution, and a small 2D/3D toggle.
+- Toronto-only navigation using the City's official Regional Municipal Boundary: camera bounds, a city-scale minimum zoom, and a polygon check that keeps the map centre inside Toronto. The city outline is drawn and surrounding areas are masked; Mapbox also clips outside buildings, trees, and labels. Both renderers apply the navigation restriction in 2D and 3D.
+- **Mapbox Standard preview** when `NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN` is configured: day lighting and built-in 3D buildings, facades, landmarks, and trees where available. The 3D button enables these objects and tilts the camera; 2D hides them and returns to a flat view.
+- A light sky-blue sandbox theme: cool off-white land, brighter blue water, pale blue buildings, and soft mint greenspace. Business/POI labels, landmark icons, and indoor labels are hidden; street, place, and transit labels remain visible. The palette and Mapbox settings live in `src/lib/map-theme.ts`.
+- **MapLibre/OpenFreeMap fallback** when no token is configured: the existing coloured map remains available with height-based building extrusions. A small notice explains how to enable Mapbox.
+- Explicit container sizing, resize handling, and loading/error feedback.
+
+The active renderer is loaded separately, so the fallback does not initialize Mapbox or make Mapbox map requests. Basemap tiles require an internet connection and a WebGL-capable browser. The current page does not wait for road-data downloads, scenario restoration, or simulation overlays.
+
+Mapbox Standard supplies its own building geometry, materials, and lighting. Detail varies by location; the preview does not promise photographic or landmark coverage throughout Toronto. Mapbox imagery and services retain their own attribution and usage requirements.
+
+The fallback uses OpenFreeMap/OpenStreetMap building heights, with a six-metre visual fallback where height is missing. Its pale-to-sky-blue building colours reflect height, not traffic conditions or measured facade colours. MapLibre's worker URL remains explicitly configured to avoid the earlier worker-loading failure.
+
+The bundled Toronto Centreline extract, its build script, and reusable road/scenario helpers remain available for later features. They are not loaded by the current map page. Everything below describes the intended product rather than features available today.
 
 ### Core analysis and interaction
 
@@ -131,7 +148,7 @@ Application and tooling code will use TypeScript, with TSX for React components.
 | Area | Tools |
 |---|---|
 | App framework | Next.js App Router, React, TypeScript strict mode |
-| Map | MapLibre GL via `react-map-gl`, OpenFreeMap vector tiles and building extrusions |
+| Map | Mapbox GL JS with Standard; MapLibre GL and OpenFreeMap as the token-free fallback |
 | Vehicle and data layers | deck.gl for paths, vehicles, event areas, and impact overlays |
 | Analysis and simulation | TypeScript Web Workers, `comlink`, `flatbush`; evaluate model feasibility on the demo area |
 | State | Zustand |
@@ -158,8 +175,10 @@ Toronto datasets will be sourced from [City of Toronto Open Data](https://open.t
 | Midblock speed and volume counts | Additional baseline checks where suitable measurements exist |
 | Neighbourhood population and employment data | Optional inputs to synthetic travel demand; document gaps and fallback weights |
 | City boundaries, wards, and neighbourhoods | Geographic context and impact summaries where useful |
+| [Regional Municipal Boundary](https://open.toronto.ca/dataset/regional-municipal-boundary/) | Official City of Toronto shape for navigation constraints, outside masking, and the city outline; bundled with source metadata |
 | Selected venues and destinations | Event access and journey examples; identify the source or label manually selected inputs |
-| OpenStreetMap via OpenFreeMap | Basemap and building geometry/heights where available; preserve required attribution |
+| Mapbox Standard | Optional basemap, buildings, facades, lighting, and 3D objects; public access token required |
+| OpenStreetMap via OpenFreeMap | Fallback basemap and building geometry/heights where available; preserve required attribution |
 
 Schedules describe planned service, not observed operations. Live vehicle positions and alerts may be added later; they do not establish how a hypothetical future disruption would behave.
 
@@ -175,31 +194,48 @@ Schedules describe planned service, not observed operations. Live vehicle positi
 
 ## Getting started
 
-**The repository is documentation-only today.** The commands and paths below are the intended setup after scaffolding; they are not runnable yet.
-
-Planned requirements: Node.js 22+ and pnpm.
+Requirements: Node.js 22+ and pnpm 9.15.9. If `pnpm` is not on your path, use `corepack pnpm` as below.
 
 ```sh
-pnpm install
-cp .env.example .env.local
-pnpm data:build
-pnpm dev
+corepack pnpm install
+corepack pnpm dev
 ```
 
-The planned development server will run at `http://localhost:3000`. Add `GEMINI_API_KEY` to `.env.local` for AI features and `TIGER_DATABASE_URL` only if optional storage is enabled.
+Open `http://localhost:3000`. Without a Mapbox token, the existing MapLibre/OpenFreeMap map is shown.
 
-| Planned script | Purpose |
+To enable the Mapbox Standard preview, copy `.env.example` to `.env.local` if you do not already have an environment file, then set:
+
+```dotenv
+NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN=your_public_mapbox_token
+```
+
+Use a public token beginning with `pk.` from your [Mapbox account](https://account.mapbox.com/access-tokens/). Public browser tokens are included in the client bundle. Restart `pnpm dev` after setting the token; production deployments require rebuilding with the variable configured. Click **3D** to inspect Standard's buildings and lighting downtown.
+
+Mapbox access is associated with your account and subject to its [usage and pricing](https://www.mapbox.com/pricing/). The base map does not use the bundled road extract. Installation and map tiles require internet access; fonts are supplied by the active map style.
+
+| Script | Purpose |
 |---|---|
 | `pnpm dev` | Start the development server |
 | `pnpm build` | Create a production build |
-| `pnpm data:fetch` | Download source data into gitignored `data/raw/` |
-| `pnpm data:build` | Fetch and build browser-ready road, transit, demand, and preset data |
-| `pnpm test` | Check routing, closure interactions, transit constraints, and deterministic model behavior |
-| `pnpm check` | Run Biome and TypeScript checks |
+| `pnpm start` | Serve the production build |
+| `pnpm data:build` | Download/cache Toronto Centreline and rebuild the selectable road extract and source metadata |
+| `pnpm data:boundary` | Download/cache the official WGS84 Toronto municipal boundary and rebuild the bundled GeoJSON and metadata |
+| `pnpm test` | Test city membership, outside masking, camera constraints, scenario restoration, and closure state |
+| `pnpm check` | Run TypeScript checks |
 
-Manual scenario creation, network analysis, and local comparison are intended to work without AI or database keys.
+The data script discovers the WGS84 GeoJSON resource from Toronto's CKAN API and caches it in gitignored `data/raw/`. To change the extraction area, supply `MAP_BOUNDS` as west,south,east,north:
 
-### Planned project structure
+```sh
+MAP_BOUNDS='-79.435,43.63,-79.345,43.685' corepack pnpm data:build
+```
+
+The extract includes segments with a vertex inside those bounds; it is a display dataset, not a validated routing graph. Generated source metadata is in `public/data/roads-metadata.json`. Remove the cached `data/raw/centreline.geojson` when you want the next build to download a fresh source snapshot.
+
+The city boundary is bundled in `src/lib/data/toronto-boundary.json`, with provenance in `public/data/toronto-boundary-metadata.json`. Its build script converts the City's WGS84 shapefile and retains the full boundary at six decimal places. Remove `data/raw/toronto-boundary.zip` before rebuilding to fetch a fresh source archive. The boundary restricts the map camera and presentation; it does not turn the separate downtown road extract into a citywide routing network.
+
+Gemini, optional database storage, GTFS processing, routing, and simulation are not wired up yet. Their dependencies and configuration will be added with those features.
+
+### Project structure
 
 ```text
 scripts/
@@ -207,14 +243,10 @@ data/raw/
 public/data/
 src/app/
 src/components/
-src/analysis/
-src/sim/
-src/transit/
-src/store/
 src/lib/
 ```
 
-Data preparation will live in `scripts/`; routing, access, and conflict checks in `src/analysis/`; traffic modeling in `src/sim/`; and GTFS processing and transit behavior in `src/transit/`. The app will include a Methodology page once implemented.
+The map component lives in `src/components/`, and app routes and styles in `src/app/`. The retained road extraction script lives in `scripts/`, with shared road/scenario types, scenario validation, and tests in `src/lib/`. Future routing and access checks will live in `src/analysis/`, traffic modeling in `src/sim/`, and transit behavior in `src/transit/`.
 
 ## Limitations and validation
 
