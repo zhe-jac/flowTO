@@ -52,7 +52,7 @@ body {
   pointer-events: none;
 }
 
-:is(.map-message, .map-view-toggle, .map-zoom-controls, .map-provider-notice, .toolbox-toggle, .toolbox-panel, .closure-preview, .closure-placement-help, .closure-notice, :where(.closure-ghost > span, .closure-ghost small)),
+:is(.map-message, .map-view-toggle, .map-zoom-controls, .map-provider-notice, .toolbox-toggle, .toolbox-panel, .toolbox-morph, .closure-preview, .closure-placement-help, .closure-notice, :where(.closure-ghost > span, .closure-ghost small)),
 .map-page :is(.mapboxgl-ctrl-attrib, .maplibregl-ctrl-attrib) {
   isolation: isolate;
   border: 1px solid var(--glass-border);
@@ -60,7 +60,7 @@ body {
   box-shadow: var(--glass-shadow);
 }
 
-:is(.map-message, .map-view-toggle, .map-zoom-controls, .map-provider-notice, .toolbox-toggle, .toolbox-panel, .closure-preview, .closure-placement-help, .closure-notice, :where(.closure-ghost > span, .closure-ghost small))::before,
+:is(.map-message, .map-view-toggle, .map-zoom-controls, .map-provider-notice, .toolbox-toggle, .toolbox-panel, .toolbox-morph, .closure-preview, .closure-placement-help, .closure-notice, :where(.closure-ghost > span, .closure-ghost small))::before,
 .map-page :is(.mapboxgl-ctrl-attrib, .maplibregl-ctrl-attrib)::before {
   position: absolute;
   z-index: -1;
@@ -307,14 +307,14 @@ button {
   border-radius: 17px;
 }
 
-.toolbox-glass-shell > :is(.toolbox-toggle, .toolbox-panel, .map-view-toggle, .map-zoom-controls) {
+.toolbox-glass-shell > :is(.toolbox-toggle, .toolbox-panel, .toolbox-morph, .map-view-toggle, .map-zoom-controls) {
   position: relative;
   z-index: 1;
   width: 100%;
 }
 
-.toolbox-glass-shell[data-enhanced="true"] > :is(.toolbox-toggle, .toolbox-panel, .map-view-toggle, .map-zoom-controls)::before,
-.toolbox-glass-shell[data-enhanced="true"] > :is(.toolbox-toggle, .toolbox-panel, .map-view-toggle, .map-zoom-controls)::after {
+.toolbox-glass-shell[data-enhanced="true"] > :is(.toolbox-toggle, .toolbox-panel, .toolbox-morph, .map-view-toggle, .map-zoom-controls)::before,
+.toolbox-glass-shell[data-enhanced="true"] > :is(.toolbox-toggle, .toolbox-panel, .toolbox-morph, .map-view-toggle, .map-zoom-controls)::after {
   display: none;
 }
 
@@ -1000,7 +1000,7 @@ button {
     --glass-panel-tint: rgb(242 249 255 / 64%);
   }
 
-  :is(.map-message, .map-view-toggle, .map-zoom-controls, .map-provider-notice, .toolbox-toggle, .toolbox-panel, .closure-preview, .closure-placement-help, .closure-notice, :where(.closure-ghost > span, .closure-ghost small))::before,
+  :is(.map-message, .map-view-toggle, .map-zoom-controls, .map-provider-notice, .toolbox-toggle, .toolbox-panel, .toolbox-morph, .closure-preview, .closure-placement-help, .closure-notice, :where(.closure-ghost > span, .closure-ghost small))::before,
   .map-page :is(.mapboxgl-ctrl-attrib, .maplibregl-ctrl-attrib)::before {
     -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.35);
     backdrop-filter: blur(var(--glass-blur)) saturate(1.35);
@@ -1008,7 +1008,7 @@ button {
 }
 
 @supports (backdrop-filter: url("#radio-glass")) {
-  :is(.map-view-toggle, .map-zoom-controls, .toolbox-toggle, .toolbox-panel, .closure-preview, .closure-placement-help)::after {
+  :is(.map-view-toggle, .map-zoom-controls, .toolbox-toggle, .toolbox-panel, .toolbox-morph, .closure-preview, .closure-placement-help)::after {
     position: absolute;
     z-index: -1;
     inset: 0;
@@ -1054,8 +1054,8 @@ button {
     --glass-border: #9ebdd2;
   }
 
-  :is(.map-message, .map-view-toggle, .map-zoom-controls, .map-provider-notice, .toolbox-toggle, .toolbox-panel, .closure-preview, .closure-placement-help, .closure-notice, :where(.closure-ghost > span, .closure-ghost small))::before,
-  :is(.map-view-toggle, .map-zoom-controls, .toolbox-toggle, .toolbox-panel, .closure-preview, .closure-placement-help)::after,
+  :is(.map-message, .map-view-toggle, .map-zoom-controls, .map-provider-notice, .toolbox-toggle, .toolbox-panel, .toolbox-morph, .closure-preview, .closure-placement-help, .closure-notice, :where(.closure-ghost > span, .closure-ghost small))::before,
+  :is(.map-view-toggle, .map-zoom-controls, .toolbox-toggle, .toolbox-panel, .toolbox-morph, .closure-preview, .closure-placement-help)::after,
   .map-page :is(.mapboxgl-ctrl-attrib, .maplibregl-ctrl-attrib)::before {
     display: none;
   }
@@ -1136,8 +1136,10 @@ button {
   bottom: 44px;
   left: 50%;
   width: min(740px, calc(100% - 180px));
-  transform: translateX(-50%);
+  /* translate (not transform) so Motion's layout transforms on the panel do not fight the centring */
+  translate: -50% 0;
 }
+
 
 .traffic-legend-shell,
 .road-panel-shell {
@@ -1829,7 +1831,9 @@ button {
   background: rgb(255 255 255 / 80%);
   box-shadow: 0 1px 4px rgb(38 78 105 / 10%);
   pointer-events: none;
-  transition: transform 420ms cubic-bezier(0.22, 1, 0.36, 1), width 420ms cubic-bezier(0.22, 1, 0.36, 1), height 420ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: transform 500ms cubic-bezier(0.4, 0, 0.2, 1), width 500ms cubic-bezier(0.4, 0, 0.2, 1), height 500ms cubic-bezier(0.4, 0, 0.2, 1);
+  outline: 1px solid rgb(100 151 185 / 25%);
+  outline-offset: -1px;
 }
 
 .map-view-toggle .sliding-control-highlight {
@@ -1925,4 +1929,111 @@ button {
 .traffic-compare {
   float: right;
   margin: 6px 0 0 8px;
+}
+
+/* Toolbox morph: the button and the panel are one glass element whose size and corners spring between the two. */
+.toolbox-morph {
+  position: relative;
+  overflow: hidden;
+  width: 48px;
+  height: 48px;
+  border-radius: 17px;
+  transition: background-color 0.3s ease;
+  will-change: width, height;
+}
+
+.toolbox-morph[data-open="true"] {
+  background: var(--glass-panel-tint);
+}
+
+/* Both states sit at the top-left of the container, which reveals the panel as it grows. */
+.closure-toolbox .toolbox-morph > :is(.toolbox-toggle, .toolbox-panel) {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.closure-toolbox .toolbox-morph[data-open="false"] > .toolbox-panel {
+  pointer-events: none;
+}
+
+/* The container carries the glass; its button and panel contents stay transparent so nothing is drawn twice. */
+.closure-toolbox .toolbox-morph > :is(.toolbox-toggle, .toolbox-panel) {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.closure-toolbox .toolbox-morph > :is(.toolbox-toggle, .toolbox-panel)::before,
+.closure-toolbox .toolbox-morph > :is(.toolbox-toggle, .toolbox-panel)::after {
+  display: none;
+}
+
+.closure-toolbox .toolbox-morph > .toolbox-panel {
+  width: 282px;
+}
+
+.traffic-minimize {
+  position: absolute;
+  top: -15px;
+  right: 18px;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  background: var(--glass-panel-tint);
+  box-shadow: 0 2px 6px rgb(38 78 105 / 10%);
+}
+
+.traffic-controls-shell[data-minimized="false"] {
+  width: min(796px, calc(100% - 24px));
+}
+
+.traffic-controls-shell {
+  overflow: hidden;
+  border-radius: 24px;
+}
+
+.traffic-controls-shell > .toolbox-glass-panel,
+.traffic-controls-shell .traffic-controls {
+  height: 100%;
+}
+
+.traffic-controls-shell[data-minimized="false"] .traffic-controls {
+  padding-right: 68px;
+}
+
+.traffic-controls-shell[data-minimized="false"] .traffic-minimize {
+  top: 16px;
+  right: 14px;
+}
+
+.traffic-controls-shell[data-minimized="true"] {
+  width: min(280px, calc(100% - 24px));
+}
+
+.traffic-controls-shell[data-minimized="true"] .traffic-controls {
+  padding: 10px 56px 10px 12px;
+  border-radius: 20px;
+}
+
+.traffic-controls-shell[data-minimized="true"] .traffic-minimize {
+  top: 50%;
+  right: 12px;
+  transform: translateY(-50%);
+}
+
+.traffic-controls-shell[data-minimized="true"] :is(.traffic-segmented, .traffic-estimate, .traffic-timeline, .traffic-clock span) {
+  display: none;
+}
+
+.traffic-controls-shell[data-minimized="true"] .traffic-clock {
+  min-width: 0;
+}
+
+.traffic-controls-shell[data-minimized="true"] .traffic-clock strong {
+  font-size: 20px;
 }

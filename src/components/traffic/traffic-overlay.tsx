@@ -18,24 +18,21 @@ import type { DayType, TrafficData, TrafficSegment } from "@/lib/traffic/types";
 import { FlowPathLayer } from "./flow-path-layer";
 import RoadPanel from "./road-panel";
 import TrafficControls from "./traffic-controls";
-import { impactedState, type Impact } from "@/lib/traffic/rerouting";
-import { disruptionStrength, disruptionWindow, scaleImpact, splitPath, waveDuration, waveLevel } from "@/lib/traffic/scenario-timing";
+import { impactedState } from "@/lib/traffic/rerouting";
+import { disruptionStrength, disruptionWindow, splitPath } from "@/lib/traffic/scenario-timing";
 import { formatClock, LEVELS } from "@/lib/traffic/model";
+import { tweenValue, retargetTween, junctionBlend, COLOUR_TRANSITION_MS, HIGHLIGHT_TRANSITION_MS, type VisualTween } from "@/lib/traffic/visual-transition";
+import { comparisonImpacts } from "@/lib/traffic/comparison";
 import { useRerouting } from "./use-rerouting";
 const FLAT_DEPTH = { depthCompare: "always", depthWriteEnabled: false } as const;
 const TILTED_DEPTH = { depthCompare: "less-equal", depthWriteEnabled: false } as const;
 const OFFSET_EXTENSION = new PathStyleExtension({ offset: true });
-/**
- * The impact wave, in simulated minutes after a disruption starts: each congestion level sweeps from the disruption to
- * the far end of the affected area in `sweep` minutes, the next level `gap` minutes behind. Faster playback speeds it up.
- */
-const WAVE_TIMING = { sweep: 30, gap: 12, blend: 8 };
-/** Affected roads are cut into pieces this long so the colour front moves smoothly along them. */
-const WAVE_PIECE_M = 20;
+
+/** Short pieces preserve the highlighted road geometry. */
+const WAVE_PIECE_M = 2;
 const HIGHLIGHT_WIDTH = 1.22;
 /** Highlighted roads are drawn at least as wide as an arterial, so small streets do not stay thin. */
 const HIGHLIGHT_MIN_BASE = 7;
-const GLOW_WIDTH = 2.2;
 const LEVEL_ORDER = LEVELS.map((level) => level.id);
 /** How much unaffected roads fade while a scenario's affected roads are highlighted. */
 const DIM_STRENGTH = 0.45;
@@ -82,9 +79,7 @@ export default function TrafficOverlay({ map, renderer, items, interacting, onLi
     const [retry, setRetry] = useState(0);
     const [selected, setSelected] = useState<number | null>(null);
     const [snapshot, setSnapshot] = useState<Snapshot>(() => ({ clock: initialTrafficClock(window.location.search), vehicles: 0 }));
-    const rerouting = useRerouting(items, snapshot.clock.day, snapshot.clock.minutes);
-    const impacts = rerouting.plan?.impacts;
-    const impactKey = JSON.stringify(impacts ?? {});
+
     const light = simulatorLight(snapshot.clock.minutes);
     const lightKey = `${light.phase}:${light.daylight}`;
     // eslint-disable-next-line react-hooks/exhaustive-deps -- lightKey captures every field of light.
@@ -98,20 +93,23 @@ export default function TrafficOverlay({ map, renderer, items, interacting, onLi
     for (const item of items) if (!placedAtRef.current.has(item.id)) placedAtRef.current.set(item.id, Math.floor(clockRef.current.minutes));
     for (const id of [...placedAtRef.current.keys()]) if (!items.some((item) => item.id === id)) placedAtRef.current.delete(id);
     const [compare, setCompare] = useState<"before" | "after">("after");
-    const compareRef = useRef(compare);
-    compareRef.current = compare;
     const strengths = items.map((item) => disruptionStrength(item, placedAtRef.current.get(item.id) ?? snapshot.clock.minutes, snapshot.clock.minutes));
     const nextStart = items.map((item, i) => strengths[i] > 0 ? null : disruptionWindow(item, placedAtRef.current.get(item.id) ?? 0).start).find((start) => start !== null) ?? null;
+    const activeItems = items.filter((_, i) => strengths[i] > 0);
+    const rerouting = useRerouting(activeItems, snapshot.clock.day, snapshot.clock.minutes);
+    const impacts = rerouting.plan?.impacts;
+    const impactKey = JSON.stringify(rerouting.plan ?? {});
+    const displayed = comparisonImpacts(rerouting.plan, items, placedAtRef.current, snapshot.clock.minutes, compare);
     const closureKey = [...closed].sort().join(",") + impactKey;
-    const latestRef = useRef({ closed, closureKey, interacting, impacts, items, compare });
+    const latestRef = useRef({ closed, closureKey, interacting, impacts, items, compare, plan: rerouting.plan });
     useEffect(() => {
-        latestRef.current = { closed, closureKey, interacting, impacts, items, compare };
+        latestRef.current = { closed, closureKey, interacting, impacts, items, compare, plan: rerouting.plan };
         if (interacting) {
             selectedRef.current = null;
             setSelected(null);
         }
         redrawRef.current();
-    }, [closed, closureKey, interacting, impacts, items, compare]);
+    }, [closed, closureKey, interacting, impacts, items, compare, rerouting.plan]);
     useEffect(() => {
         selectedRef.current = selected;
         redrawRef.current();
@@ -165,59 +163,72 @@ export default function TrafficOverlay({ map, renderer, items, interacting, onLi
         let visibleClosures: string | null = null;
         let viewDirty = true;
         let detach = () => { };
-        // Impact wave: affected roads change colour along their length on the simulator clock, sweeping out from the
-        // disruptions one congestion level at a time, so congestion builds over simulated minutes rather than at once.
-        // Roads that get meaningfully worse are highlighted while the rest of the network dims.
-        type Piece = { flow: Flow; path: [number, number][]; reach: number };
+        // Highlight the affected area; colour always follows the same effective state as speed and statistics.
+        type Piece = { flow: Flow; path: [number, number][]; fromStartM: number; fromEndM: number };
         const segmentIndex = new Map(segments.map((segment, index) => [segment.id, index]));
+        const endpoint = (p: number[]) => `${p[0].toFixed(5)},${p[1].toFixed(5)}`;
+        const junctions = new Map<string, Set<number>>();
+        segments.forEach((segment, index) => {
+            for (const point of [segment.coords[0], segment.coords.at(-1)!]) {
+                const key = endpoint(point);
+                const neighbours = junctions.get(key) ?? new Set<number>();
+                neighbours.add(index); junctions.set(key, neighbours);
+            }
+        });
+        const targetLevels = new Float32Array(segments.length);
+        const junctionColourCache = new Map<string, number>();
+        const pathLength = (path: number[][]) => path.slice(1).reduce((sum, p, i) => sum + Math.hypot((p[0] - path[i][0]) * 80400, (p[1] - path[i][1]) * 111200), 0);
         let effectiveClosed = new Set<string>();
         let effectiveKey = "";
         let pieceKey = "";
         let pieces: Piece[] = [];
-        let scenarioStart: number | null = null;
-        const baseLevel = new Map<number, number>();
-        const fullLevel = new Map<number, number>();
+        let boldPieces: Piece[] = [];
+        let plainPieces: Piece[] = [];
+        let membershipKey = "";
+        const displayLevel = new Map<number, number>();
         let highlighted = new Set<number>();
-        let impactVersion = 0;
         let dim = 0;
-        const metresBetween = (a: number[], b: number[]) => Math.hypot((a[0] - b[0]) * 80400, (a[1] - b[1]) * 111200);
-        const minutesSinceStart = (minutes: number) => scenarioStart === null ? -1 : ((minutes - scenarioStart) % 1440 + 1440) % 1440;
+        const colourTweens = new Map<number, VisualTween>();
+        const emphasisTweens = new Map<number, VisualTween>();
+        const visualLevels = new Map<number, number>();
+        const visualEmphasis = new Map<number, number>();
+        let visualVersion = 0;
+        let visualMoving = false;
         const rebuildPieces = (ids: string[]) => {
-            const origins = latestRef.current.items.map((item) => item.position as number[]);
-            const raw: (Piece & { distance: number })[] = [];
+            pieces = [];
             for (const id of ids) {
                 const index = segmentIndex.get(id);
                 if (index === undefined || effectiveClosed.has(id)) continue;
                 for (const flow of flowsBySegment[index]) {
+                    const total = pathLength(flow.path);
+                    let travelled = 0;
                     for (const path of splitPath(flow.path, WAVE_PIECE_M)) {
-                        const centre = path[Math.floor(path.length / 2)];
-                        raw.push({ flow, path, reach: 0, distance: origins.length ? Math.min(...origins.map((origin) => metresBetween(centre, origin))) : 0 });
+                        const length = pathLength(path);
+                        const centre = travelled + length / 2;
+                        pieces.push({ flow, path, fromStartM: centre, fromEndM: total - centre });
+                        travelled += length;
                     }
                 }
             }
-            const farthest = Math.max(1, ...raw.map((piece) => piece.distance));
-            pieces = raw.map(({ flow, path, distance }) => ({ flow, path, reach: distance / farthest }));
         };
         const refreshState = () => {
             const { minutes, day } = clockRef.current;
             const { closureKey, items: scenarioItems, impacts: planImpacts, compare: mode } = latestRef.current;
             const strengths = scenarioItems.map((item) => mode === "before" ? 0 : disruptionStrength(item, placedAtRef.current.get(item.id) ?? minutes, minutes));
-            const strength = Math.max(0, ...strengths);
             const activeKey = `${closureKey}|${mode}|${scenarioItems.map((item, i) => strengths[i] > 0 ? item.id : "").join(",")}`;
             if (day === stateDay && Math.abs(minutes - stateMinutes) < 0.5 && stateClosures === activeKey)
                 return;
             stateMinutes = minutes;
             stateDay = day;
             stateClosures = activeKey;
-            effectiveClosed = new Set(scenarioItems.flatMap((item, i) => strengths[i] > 0 && item.kind !== "event" && item.restriction === "full-closure" ? [item.roadId] : []));
+            const effective = comparisonImpacts(latestRef.current.plan, scenarioItems, placedAtRef.current, minutes, mode);
+            effectiveClosed = effective.closed;
             effectiveKey = [...effectiveClosed].sort().join(",");
-            const starts = scenarioItems.flatMap((item, i) => strengths[i] > 0 ? [disruptionWindow(item, placedAtRef.current.get(item.id) ?? minutes).start] : []);
-            scenarioStart = starts.length ? starts.reduce((earliest, start) => minutesSince(start, minutes) > minutesSince(earliest, minutes) ? start : earliest) : null;
-            const activeImpacts = strength > 0 && planImpacts ? planImpacts : {};
+
             // The affected area is drawn (bold, in normal colours) even before the disruption starts or in "Before" mode,
             // so comparing only changes colour, never width.
             const areaImpacts = planImpacts ?? {};
-            const impacts: Record<string, Impact> = Object.fromEntries(Object.entries(activeImpacts).map(([id, impact]) => [id, scaleImpact(impact, strength)]));
+            const impacts = effective.impacts;
             const share = profileShare(data.profiles[day], minutes);
             const states = segments.map((segment) => impactedState(segment, share, day, impacts[segment.id]));
             vehicles = segments.reduce((sum, segment, i) => sum + (effectiveClosed.has(segment.id) ? 0 : states[i].flow / Math.max(1, states[i].speedKmh) * segment.lengthM / 1000 * (segment.oneway === 0 ? 2 : 1)), 0);
@@ -243,8 +254,18 @@ export default function TrafficOverlay({ map, renderer, items, interacting, onLi
                 colorVersion++;
             if (speedsChanged)
                 paramVersion++;
-            // Each affected road moves from its normal level to its full-impact level as the wave passes it.
-            const ids = Object.keys(areaImpacts);
+            // Use the effective buildup state for every displayed congestion colour.
+            const affectedIds = Object.keys(areaImpacts);
+            const drawIds = new Set(affectedIds);
+            for (const id of affectedIds) {
+                const index = segmentIndex.get(id);
+                if (index === undefined) continue;
+                for (const p of [segments[index].coords[0], segments[index].coords.at(-1)!]) {
+                    for (const neighbour of junctions.get(endpoint(p)) ?? []) drawIds.add(segments[neighbour].id);
+                }
+            }
+            const ids = [...drawIds];
+            states.forEach((state, index) => { targetLevels[index] = LEVEL_ORDER.indexOf(state.level); });
             const nextPieceKey = `${ids.sort().join(",")}|${effectiveKey}`;
             const scenarioChanged = nextPieceKey !== pieceKey;
             if (scenarioChanged) {
@@ -252,9 +273,8 @@ export default function TrafficOverlay({ map, renderer, items, interacting, onLi
                 rebuildPieces(ids);
                 highlighted = new Set();
             }
-            const showChange = mode === "after" && strength > 0;
-            baseLevel.clear();
-            fullLevel.clear();
+
+            displayLevel.clear();
             // Highlights only grow within a scenario, so a road does not flick between bold and thin as the clock moves.
             const nextHighlights = new Set(highlighted);
             for (const id of ids) {
@@ -262,14 +282,30 @@ export default function TrafficOverlay({ map, renderer, items, interacting, onLi
                 if (index === undefined) continue;
                 const baseline = directionState(segments[index], share, day);
                 const full = impactedState(segments[index], share, day, areaImpacts[id]);
-                baseLevel.set(index, LEVEL_ORDER.indexOf(baseline.level));
-                fullLevel.set(index, showChange ? LEVEL_ORDER.indexOf(full.level) : LEVEL_ORDER.indexOf(baseline.level));
-                if (full.level !== baseline.level || full.ratio - baseline.ratio > 0.08 || areaImpacts[id].capacityScale < 1) nextHighlights.add(index);
+                displayLevel.set(index, LEVEL_ORDER.indexOf(states[index].level));
+                if (full.level !== baseline.level || full.ratio - baseline.ratio > 0.08 || (areaImpacts[id]?.capacityScale ?? 1) < 1) nextHighlights.add(index);
             }
             highlighted = nextHighlights;
-            impactVersion++;
+            const currentIndices = new Set(ids.map(id => segmentIndex.get(id)));
+            for (const index of emphasisTweens.keys()) if (!currentIndices.has(index)) {
+                emphasisTweens.delete(index); colourTweens.delete(index);
+                visualEmphasis.delete(index); visualLevels.delete(index);
+            }
+            const now = performance.now();
+            for (const id of ids) {
+                const index = segmentIndex.get(id);
+                if (index === undefined) continue;
+                const baseline = LEVEL_ORDER.indexOf(directionState(segments[index], share, day).level);
+                colourTweens.set(index, retargetTween(colourTweens.get(index), displayLevel.get(index) ?? baseline, now, preference.matches ? 0 : COLOUR_TRANSITION_MS, baseline));
+                emphasisTweens.set(index, retargetTween(emphasisTweens.get(index), highlighted.has(index) ? 1 : 0, now, preference.matches ? 0 : HIGHLIGHT_TRANSITION_MS, 0));
+            }
+            const nextMembershipKey = `${pieceKey}|${[...highlighted].sort((a, b) => a - b).join(",")}`;
+            if (membershipKey !== nextMembershipKey) {
+                membershipKey = nextMembershipKey;
+                boldPieces = pieces.filter((piece) => highlighted.has(piece.flow.segment));
+                plainPieces = pieces.filter((piece) => !highlighted.has(piece.flow.segment));
+            }
         };
-        const minutesSince = (start: number, minutes: number) => ((minutes - start) % 1440 + 1440) % 1440;
         const levelColor = (level: number, vivid: boolean) => {
             const low = Math.max(0, Math.min(3, Math.floor(level)));
             const high = Math.min(3, low + 1);
@@ -279,14 +315,25 @@ export default function TrafficOverlay({ map, renderer, items, interacting, onLi
             const b = palette(LEVEL_ORDER[high]);
             return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
         };
-        /** Colour of a piece `since` simulated minutes after the scenario started, vivid when its road is highlighted. */
-        const pieceColor = (piece: Piece, since: number, alpha: number): [number, number, number, number] => {
+        /** Highlighting changes emphasis, never the calculated congestion category. */
+        const pieceColor = (piece: Piece, alpha: number): [number, number, number, number] => {
             const index = piece.flow.segment;
-            const from = baseLevel.get(index) ?? 0;
-            const to = fullLevel.get(index) ?? from;
-            const level = since < 0 ? from : waveLevel(from, to, since, piece.reach, WAVE_TIMING);
-            const [r, g, b] = levelColor(level, highlighted.has(index));
-            return [r, g, b, alpha];
+            const to = visualLevels.get(index) ?? displayLevel.get(index) ?? 0;
+            const shared = (point: number[], emphasis = false) => {
+                const key = `${endpoint(point)}:${emphasis}`;
+                const cached = junctionColourCache.get(key);
+                if (cached !== undefined) return cached;
+                const neighbours = [...(junctions.get(endpoint(point)) ?? [])].filter(i => !effectiveClosed.has(segments[i].id));
+                const value = neighbours.length ? neighbours.reduce((sum, i) => sum + (emphasis ? visualEmphasis.get(i) ?? 0 : visualLevels.get(i) ?? targetLevels[i]), 0) / neighbours.length : emphasis ? 0 : to;
+                junctionColourCache.set(key, value);
+                return value;
+            };
+            const start = piece.flow.path[0], end = piece.flow.path.at(-1)!;
+            const level = junctionBlend(to, shared(start), shared(end), piece.fromStartM, piece.fromEndM);
+            const emphasis = junctionBlend(visualEmphasis.get(index) ?? 0, shared(start, true), shared(end, true), piece.fromStartM, piece.fromEndM);
+            const normal = levelColor(level, false), vivid = levelColor(level, true);
+            const [r, g, b] = normal.map((channel, i) => channel + (vivid[i] - channel) * emphasis);
+            return [r, g, b, alpha * (highlighted.has(index) ? visualEmphasis.get(index) ?? 0 : 1)];
         };
         const roadPick = (info: PickingInfo<Flow>) => {
             if (latestRef.current.interacting || map.getCanvas().parentElement?.dataset.disruptionInteraction === "true")
@@ -361,36 +408,40 @@ export default function TrafficOverlay({ map, renderer, items, interacting, onLi
                     transitions: { getColor: preference.matches ? 0 : 650 },
                     updateTriggers: { getColor: colorVersion, getFlowParams: paramVersion },
                 });
-                const since = minutesSinceStart(clockRef.current.minutes);
-                const spreading = since >= 0 && since < waveDuration(3, WAVE_TIMING);
-                // Colours follow the simulator clock, so they are recomputed every frame while the wave is moving.
-                if (spreading && clockRef.current.playing) impactVersion++;
+
+                visualMoving = false;
+                let visualsChanged = false;
+                for (const [index, tween] of colourTweens) {
+                    const value = tweenValue(tween, now);
+                    if (visualLevels.get(index) !== value) visualsChanged = true;
+                    visualLevels.set(index, value);
+                    if (now < tween.started + tween.duration) visualMoving = true;
+                }
+                for (const [index, tween] of emphasisTweens) {
+                    const value = tweenValue(tween, now);
+                    if (visualEmphasis.get(index) !== value) visualsChanged = true;
+                    visualEmphasis.set(index, value);
+                    if (now < tween.started + tween.duration) visualMoving = true;
+                }
+                if (visualsChanged) visualVersion++;
+                junctionColourCache.clear();
                 const emphasis = highlighted.size && pieces.length ? 1 : 0;
                 dim += (emphasis - dim) * Math.min(1, seconds * 4);
                 const rest = 1 - DIM_STRENGTH * dim;
                 layers.push(flowLayer("traffic-flow-local", localFlows, localOpacity * rest), flowLayer("traffic-flow-collectors", collectorFlows, collectorOpacity * rest), flowLayer("traffic-flow", mainFlows, rest));
-                const boldPieces = pieces.filter((piece) => highlighted.has(piece.flow.segment));
-                const plainPieces = pieces.filter((piece) => !highlighted.has(piece.flow.segment));
-                const boldWidth = (piece: Piece) => Math.max(piece.flow.width, HIGHLIGHT_MIN_BASE);
-                if (boldPieces.length) layers.push(new PathLayer<Piece, { getOffset?: (piece: Piece) => number }>({
-                    id: "traffic-impact-glow", ...placement, parameters: depth, data: boldPieces,
-                    getPath: (piece) => piece.path, getColor: (piece) => pieceColor(piece, since, 60), getWidth: (piece) => boldWidth(piece) * GLOW_WIDTH,
-                    getOffset: (piece) => piece.flow.twoWay ? -0.6 * piece.flow.width / (boldWidth(piece) * GLOW_WIDTH) : 0,
-                    widthUnits: "pixels", widthScale, widthMinPixels: 8, capRounded: false, jointRounded: true, extensions: [OFFSET_EXTENSION],
-                    updateTriggers: { getColor: impactVersion, getWidth: pieceKey, getOffset: pieceKey },
-                }));
+                const boldWidth = (piece: Piece) => piece.flow.width + (Math.max(piece.flow.width, HIGHLIGHT_MIN_BASE) * HIGHLIGHT_WIDTH - piece.flow.width) * (visualEmphasis.get(piece.flow.segment) ?? 0);
                 const impactLayer = (id: string, data: Piece[], bold: boolean) => new FlowPathLayer<Piece>({
                     id, ...placement, parameters: depth, data,
                     getPath: (piece) => piece.path,
-                    getColor: (piece) => pieceColor(piece, since, 255),
-                    getWidth: (piece) => bold ? boldWidth(piece) * HIGHLIGHT_WIDTH : piece.flow.width,
+                    getColor: (piece) => pieceColor(piece, 255),
+                    getWidth: (piece) => bold ? boldWidth(piece) : piece.flow.width,
                     // Keep each direction centred where the normal ribbon is, whatever the drawn width.
-                    getOffset: (piece) => piece.flow.twoWay ? -0.6 * piece.flow.width / (bold ? boldWidth(piece) * HIGHLIGHT_WIDTH : piece.flow.width) : 0,
+                    getOffset: (piece) => piece.flow.twoWay ? -0.6 * piece.flow.width / (bold ? boldWidth(piece) : piece.flow.width) : 0,
                     getFlowParams: (piece) => [flowSpeeds[piece.flow.index], flowPhases[piece.flow.index]],
                     time: animationTime, pulseSpacing: PULSE_SPACING, widthUnits: "pixels", widthScale,
-                    widthMinPixels: bold ? 3.5 : 1.4, widthMaxPixels: bold ? 12 : 8, capRounded: true, jointRounded: true, antialiasing: true,
+                    widthMinPixels: 1.1, widthMaxPixels: bold ? 12 : 8, capRounded: false, jointRounded: true, antialiasing: true,
                     pickable: false, extensions: [OFFSET_EXTENSION],
-                    updateTriggers: { getColor: impactVersion, getFlowParams: paramVersion, getWidth: pieceKey, getOffset: pieceKey },
+                    updateTriggers: { getColor: visualVersion, getFlowParams: paramVersion, getWidth: visualVersion, getOffset: visualVersion },
                 });
                 if (plainPieces.length) layers.push(impactLayer("traffic-flow-impact", plainPieces, false));
                 if (boldPieces.length) layers.push(impactLayer("traffic-flow-highlight", boldPieces, true));
@@ -400,7 +451,7 @@ export default function TrafficOverlay({ map, renderer, items, interacting, onLi
                     const clock = clockRef.current;
                     setSnapshot((previous) => Math.floor(previous.clock.minutes) === Math.floor(clock.minutes) && previous.clock.day === clock.day && previous.clock.playing === clock.playing && previous.clock.rate.id === clock.rate.id && Math.round(previous.vehicles) === Math.round(vehicles) ? previous : { clock, vehicles });
                 }
-                if ((preference.matches || !clockRef.current.playing) && Math.abs(dim - (highlighted.size && pieces.length ? 1 : 0)) < 0.01)
+                if (!visualMoving && (preference.matches || !clockRef.current.playing) && Math.abs(dim - (highlighted.size && pieces.length ? 1 : 0)) < 0.01)
                     timer = window.setTimeout(() => tick(performance.now()), 250);
                 else
                     frame = requestAnimationFrame(tick);
@@ -439,8 +490,8 @@ export default function TrafficOverlay({ map, renderer, items, interacting, onLi
     };
     const selectedSegment = data && selected !== null && !interacting ? data.segments[selected] : null;
     return (<div className="traffic-ui" data-interacting={interacting}>
-      {data ? <TrafficControls clock={snapshot.clock} profile={data.profiles[snapshot.clock.day]} vehicles={snapshot.vehicles} closures={closed.size} onChange={updateClock} scenario={items.length ? { text: [compare === "before" ? "Showing before disruptions" : strengths.every((value) => value === 0) && nextStart !== null ? `Disruptions start at ${formatClock(nextStart)}` : Math.max(...strengths) < 1 ? "Effects building up" : null, rerouting.loading ? "Estimating diversions…" : rerouting.error ?? (rerouting.plan?.warning ? "Local diversion estimate (Gemini unavailable)" : rerouting.plan?.source === "gemini" ? "Diversions estimated with Gemini" : "Local diversion estimate")].filter(Boolean).join(" · "), retry: rerouting.error || rerouting.plan?.warning ? rerouting.retry : undefined, compare, onCompare: setCompare } : null} /> : null}
-      {selectedSegment && data ? <RoadPanel segment={selectedSegment} data={data} clock={snapshot.clock} impact={impacts?.[selectedSegment.id]} closed={closed.has(selectedSegment.id)} onClose={() => setSelected(null)}/> : null}
+      {data ? <TrafficControls clock={snapshot.clock} profile={data.profiles[snapshot.clock.day]} vehicles={snapshot.vehicles} closures={displayed.closed.size} onChange={updateClock} scenario={items.length ? { text: [compare === "before" ? "Showing before disruptions" : strengths.every((value) => value === 0) && nextStart !== null ? `Disruptions start at ${formatClock(nextStart)}` : Math.max(...strengths) < 1 ? "Effects building up" : null, rerouting.loading ? "Estimating diversions…" : rerouting.error ?? (rerouting.plan?.warning ? "Local diversion estimate (Gemini unavailable)" : rerouting.plan?.source === "gemini" ? "Diversions estimated with Gemini" : "Local diversion estimate")].filter(Boolean).join(" · "), retry: rerouting.error || rerouting.plan?.warning ? rerouting.retry : undefined, compare, onCompare: setCompare } : null} /> : null}
+      {selectedSegment && data ? <RoadPanel segment={selectedSegment} data={data} clock={snapshot.clock} impact={displayed.impacts[selectedSegment.id]} closed={displayed.closed.has(selectedSegment.id)} onClose={() => setSelected(null)}/> : null}
       {!data && !error ? <p className="traffic-status" role="status">Loading typical traffic…</p> : null}
       {error ? <p className="traffic-status traffic-status-error" role="alert">{error} <button type="button" onClick={() => { setError(null); setRetry((value) => value + 1); }}>Retry</button></p> : null}
     </div>);
