@@ -17,7 +17,7 @@ const DAY = { daylight: 1, phase: "day", theme: "day" } as const;
 test("the simulator follows Toronto's sunrise and sunset and wraps midnight", () => {
   for (const minute of [0, 6 * 60, 20 * 60, 1439, 1440, -1]) assert.equal(simulatorTheme(minute, OCTOBER), "night");
   for (const minute of [9 * 60, 720, 17 * 60, 1440 + 720]) assert.equal(simulatorTheme(minute, OCTOBER), "day");
-  const clock = { minutes: 19 * 60, day: "weekday" as const, playing: true, rate: CLOCK_RATES[2] };
+  const clock = { date: "2026-10-16", minutes: 19 * 60, day: "weekday" as const, playing: true, rate: CLOCK_RATES[2] };
   assert.equal(simulatorTheme(advanceClock(clock, 2).minutes, OCTOBER), "night");
   assert.equal(simulatorTheme(advanceClock({ ...clock, minutes: 12 * 60, playing: false }, 2).minutes, OCTOBER), "day");
 });

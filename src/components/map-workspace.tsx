@@ -6,6 +6,7 @@ import type { Map as MapboxMap } from "mapbox-gl";
 import type { Map as MapLibreMap } from "maplibre-gl";
 import type { Disruption } from "@/lib/disruptions";
 import { initialTrafficClock } from "@/lib/traffic/clock";
+import { dateAtNoon } from "@/lib/traffic/simulation-date";
 import { simulatorLight, type SimulatorLight } from "@/lib/daylight";
 import { createMapLighting } from "@/lib/map-lighting";
 import DisruptionToolbox from "./disruption-toolbox";
@@ -17,7 +18,7 @@ export default function MapWorkspace({ map, renderer }: { map: MapboxMap | MapLi
   const [items, setItems] = useState<Disruption[]>([]);
   const [interacting, setInteracting] = useState(false);
   const [buildingFade, setBuildingFade] = useState<BuildingFadeController | null>(null);
-  const [light, setLight] = useState<SimulatorLight>(() => simulatorLight(initialTrafficClock(window.location.search).minutes));
+  const [light, setLight] = useState<SimulatorLight>(() => { const clock = initialTrafficClock(window.location.search); return simulatorLight(clock.minutes, dateAtNoon(clock.date)); });
   const theme = light.theme;
   const lighting = useMemo(() => createMapLighting(map, renderer), [map, renderer]);
 
