@@ -1,6 +1,8 @@
+import { simulatorLight } from "./daylight";
+
 export type SimulatorTheme = "day" | "night";
 
-export function simulatorTheme(minutes: number): SimulatorTheme {
-  const wrapped = ((minutes % 1440) + 1440) % 1440;
-  return wrapped < 360 || wrapped >= 1080 ? "night" : "day";
+/** Day or night at a simulator time, switching halfway through Toronto's dawn and dusk for today's date. */
+export function simulatorTheme(minutes: number, date = new Date()): SimulatorTheme {
+  return simulatorLight(minutes, date).theme;
 }

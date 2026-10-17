@@ -26,9 +26,10 @@ export function installDisruptionModels(map: DisruptionMap, onReady: (ready: boo
   let failed = false;
   const repaint = () => { if (!disposed && !document.hidden) map.triggerRepaint(); };
   const updateLighting = () => {
-    const night = document.documentElement.dataset.simTheme === "night";
-    ambient.intensity = night ? 1.2 : 2.1;
-    sun.intensity = night ? 0.9 : 2.5;
+    const stored = Number(document.documentElement.dataset.simDaylight);
+    const daylight = Number.isFinite(stored) ? stored : document.documentElement.dataset.simTheme === "night" ? 0 : 1;
+    ambient.intensity = 1.2 + 0.9 * daylight;
+    sun.intensity = 0.9 + 1.6 * daylight;
     repaint();
   };
   document.addEventListener("simulator-theme-change", updateLighting);

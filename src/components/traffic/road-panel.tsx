@@ -9,11 +9,20 @@ const CHART_H = 64;
 function sourceText(segment: TrafficSegment) {
     const source = segment.source;
     const year = (date?: string) => (date ? ` (${date.slice(0, 10)})` : "");
+    const adjusted = (factor?: number) => {
+        if (!factor || Math.abs(factor - 1) < 0.02) return "";
+        const percent = Math.round((factor - 1) * 100);
+        return ` Adjusted to recent (2022+) levels: ${percent > 0 ? "+" : ""}${percent}%.`;
+    };
     switch (source.kind) {
-        case "midblock":
-            return `Measured by a City midblock count at ${source.label}${year(source.date)}.`;
+        case "midblock": {
+            const latest = source.date.slice(0, 4);
+            if (source.counts && source.counts > 1)
+                return `Based on ${source.counts} City midblock counts at ${source.label} (${source.firstYear}–${latest}), newest weighted most.${adjusted(source.adjustment)}`;
+            return `Measured by a City midblock count at ${source.label}${year(source.date)}.${adjusted(source.adjustment)}`;
+        }
         case "intersection":
-            return `Estimated from a City intersection count at ${source.label}${year(source.date)}.`;
+            return `Estimated from a City intersection count at ${source.label}${year(source.date)}.${adjusted(source.adjustment)}`;
         case "street":
             return `Estimated from a count ${source.distanceM.toLocaleString()} m along ${segment.name}${source.label ? ` at ${source.label}` : ""}${year(source.date)}.`;
         case "class":
