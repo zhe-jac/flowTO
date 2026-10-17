@@ -213,6 +213,16 @@ corepack pnpm dev
 
 Open `http://localhost:3000`. Without a Mapbox token, the existing MapLibre/OpenFreeMap map is shown.
 
+### Traffic diversion estimates
+
+Set `GEMINI_API_KEY` in `.env.local` and restart the development server. `GEMINI_MODEL` optionally overrides the default `gemini-3.8-flash`. The key stays on the server; the browser sends disruptions to `/api/traffic/reroute`.
+
+Saving, moving, or removing a disruption recalculates affected traffic. The server finds connected detours respecting one-way streets and other restrictions, then asks Gemini to distribute diverted demand across those routes. Events estimate additional vehicle arrivals on approach roads. Lane reductions reduce capacity and divert part of the original flow. Road colors, animated speeds, vehicle estimates, and selected-road statistics use the resulting scenario. The daily chart remains the baseline.
+
+Requests are debounced and cached, with demand recalculated for each simulator hour or day-type change. Up to 20 disruptions can be analyzed together. If Gemini fails, a local route-based estimate is shown with a retry option. Disconnected demand remains queued rather than being assigned to invented roads. Overlapping restrictions on one road apply only the strongest restriction.
+
+These are illustrative planning estimates, not calibrated traffic forecasts: there is no origin/destination demand matrix, turn-restriction dataset, queue propagation, or traffic equilibrium solver. Two-way volumes are displayed as an even directional split. All saved disruptions are active at every playback time; date schedules remain planning metadata.
+
 To enable the Mapbox Standard preview, copy `.env.example` to `.env.local` if you do not already have an environment file, then set:
 
 ```dotenv

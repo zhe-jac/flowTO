@@ -4,6 +4,7 @@ import { LEVEL_COLORS } from "@/lib/traffic/colors";
 import { directionState, formatClock, LEVELS, MINUTES_PER_DAY, profileShare, travelDirection } from "@/lib/traffic/model";
 import { CLASS_ASSUMPTIONS, type TrafficData, type TrafficSegment } from "@/lib/traffic/types";
 import GlassSurface from "../glass-surface";
+import { impactedState, type Impact } from "@/lib/traffic/rerouting";
 const CHART_W = 260;
 const CHART_H = 64;
 function sourceText(segment: TrafficSegment) {
@@ -40,16 +41,17 @@ function directions(segment: TrafficSegment) {
         return [backward];
     return [forward, backward];
 }
-export default function RoadPanel({ segment, data, clock, closed, onClose }: {
+export default function RoadPanel({ segment, data, clock, closed, impact, onClose }: {
     segment: TrafficSegment;
     data: TrafficData;
     clock: ClockState;
     closed: boolean;
+    impact?: Impact;
     onClose: () => void;
 }) {
     const profile = data.profiles[clock.day];
     const share = profileShare(profile, clock.minutes);
-    const state = directionState(segment, share, clock.day);
+    const state = impactedState(segment, share, clock.day, impact);
     const level = LEVELS.find((item) => item.id === state.level)!;
     const assumption = CLASS_ASSUMPTIONS[segment.cls];
     const daily = clock.day === "weekday" ? segment.weekdayDaily : segment.weekendDaily;
@@ -67,20 +69,21 @@ export default function RoadPanel({ segment, data, clock, closed, onClose }: {
         </div>
         <button type="button" className="road-panel-close" aria-label="Close road details" onClick={onClose}>×</button>
       </header>
-      {closed ? <p className="road-panel-note">Closed in this scenario. Figures below describe typical baseline traffic; rerouting has not been calculated.</p> : null}
+      {closed ? <p className="road-panel-note">Closed in this scenario. Traffic is diverted to connected roads where a detour is available.</p> : null}
 
       <p className="road-panel-level" style={{ borderColor: LEVEL_COLORS[state.level].css }}>
         <i style={{ background: LEVEL_COLORS[state.level].css }} aria-hidden="true"/>
-        <strong>{level.label}</strong>
-        <span>at {formatClock(clock.minutes)}, typical {clock.day}</span>
+        <strong>{closed ? "Closed" : level.label}</strong>
+        <span>at {formatClock(clock.minutes)}, {impact ? "scenario" : "typical"} {clock.day}</span>
       </p>
 
       <dl className="road-panel-stats">
         <div><dt>Vehicles / hour</dt><dd>{Math.round(state.flow).toLocaleString()}<small>{labels.length > 1 ? " each way" : ` ${labels[0].toLowerCase()}`}</small></dd></div>
         <div><dt>Road capacity used</dt><dd>{Math.round(state.ratio * 100)}%</dd></div>
         <div><dt>Estimated speed</dt><dd>{Math.round(state.speedKmh)}<small> km/h</small></dd></div>
-        <div><dt>Vehicles / day</dt><dd>{daily.toLocaleString()}<small> total</small></dd></div>
+        <div><dt>Baseline vehicles / day</dt><dd>{daily.toLocaleString()}<small> total</small></dd></div>
       </dl>
+      {impact ? <p className="road-panel-note">Scenario estimate includes diverted traffic and reduced capacity. The daily chart shows the baseline.</p> : null}
       {labels.length > 1 ? <p className="road-panel-note">{labels.join(" and ")} traffic are assumed to split evenly.</p> : null}
 
       <figure className="road-panel-chart">
