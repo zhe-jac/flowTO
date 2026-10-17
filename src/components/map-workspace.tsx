@@ -1,23 +1,31 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Map as MapboxMap } from "mapbox-gl";
 import type { Map as MapLibreMap } from "maplibre-gl";
 import type { Disruption } from "@/lib/disruptions";
 import { initialTrafficClock } from "@/lib/traffic/clock";
+import { dateAtNoon } from "@/lib/traffic/simulation-date";
 import { simulatorLight, type SimulatorLight } from "@/lib/daylight";
 import { createMapLighting } from "@/lib/map-lighting";
 import DisruptionToolbox from "./disruption-toolbox";
+import WeatherMenu from "./weather-menu";
+import WeatherPrecipitation from "./weather-precipitation";
+import { CLEAR_WEATHER, type WeatherState } from "@/lib/weather";
 import { installBuildingFade, type BuildingFadeController } from "@/lib/building-fade-layer";
 
 const TrafficOverlay = dynamic(() => import("./traffic/traffic-overlay"), { ssr: false });
 
 export default function MapWorkspace({ map, renderer }: { map: MapboxMap | MapLibreMap; renderer: "mapbox" | "maplibre" }) {
+  const [panel, setPanel] = useState<"toolbox" | "weather" | null>(null);
+  const [weather, setWeather] = useState<WeatherState>(CLEAR_WEATHER);
+  const openToolbox = useCallback((open: boolean) => setPanel(open ? "toolbox" : null), []);
+  const openWeather = useCallback((open: boolean) => setPanel(open ? "weather" : null), []);
   const [items, setItems] = useState<Disruption[]>([]);
   const [interacting, setInteracting] = useState(false);
   const [buildingFade, setBuildingFade] = useState<BuildingFadeController | null>(null);
-  const [light, setLight] = useState<SimulatorLight>(() => simulatorLight(initialTrafficClock(window.location.search).minutes));
+  const [light, setLight] = useState<SimulatorLight>(() => { const clock = initialTrafficClock(window.location.search); return simulatorLight(clock.minutes, dateAtNoon(clock.date)); });
   const theme = light.theme;
   const lighting = useMemo(() => createMapLighting(map, renderer), [map, renderer]);
 
@@ -47,7 +55,9 @@ export default function MapWorkspace({ map, renderer }: { map: MapboxMap | MapLi
 
   return (
     <>
-      <DisruptionToolbox map={map} onItemsChange={setItems} onInteractionChange={setInteracting} />
+      <WeatherPrecipitation weather={weather} night={theme === "night"} />
+      <DisruptionToolbox map={map} onItemsChange={setItems} onInteractionChange={setInteracting} open={panel === "toolbox"} onOpenChange={openToolbox} suspended={panel === "weather"} />
+      <WeatherMenu open={panel === "weather"} onOpenChange={openWeather} weather={weather} onChange={setWeather} />
       <TrafficOverlay map={map} renderer={renderer} items={items} interacting={interacting} onLightChange={setLight} buildingFade={buildingFade} />
     </>
   );

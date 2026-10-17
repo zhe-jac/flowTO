@@ -24,6 +24,7 @@ import { formatClock, LEVELS } from "@/lib/traffic/model";
 import { tweenValue, retargetTween, junctionBlend, COLOUR_TRANSITION_MS, HIGHLIGHT_TRANSITION_MS, type VisualTween } from "@/lib/traffic/visual-transition";
 import { comparisonImpacts } from "@/lib/traffic/comparison";
 import { useRerouting } from "./use-rerouting";
+import { dateAtNoon } from "@/lib/traffic/simulation-date";
 import { buildingFadeStrength } from "@/lib/building-fade";
 import type { BuildingFadeController } from "@/lib/building-fade-layer";
 import { BuildingFadeExtension } from "./building-fade-extension";
@@ -87,7 +88,8 @@ export default function TrafficOverlay({ map, renderer, items, interacting, onLi
     const [selected, setSelected] = useState<number | null>(null);
     const [snapshot, setSnapshot] = useState<Snapshot>(() => ({ clock: initialTrafficClock(window.location.search), vehicles: 0 }));
 
-    const light = simulatorLight(snapshot.clock.minutes);
+    const simulationDate = useMemo(() => dateAtNoon(snapshot.clock.date), [snapshot.clock.date]);
+    const light = simulatorLight(snapshot.clock.minutes, simulationDate);
     const lightKey = `${light.phase}:${light.daylight}`;
     // eslint-disable-next-line react-hooks/exhaustive-deps -- lightKey captures every field of light.
     useEffect(() => { onLightChange(light); }, [lightKey, onLightChange]);
@@ -480,7 +482,7 @@ export default function TrafficOverlay({ map, renderer, items, interacting, onLi
                 if (now - lastUi >= 250) {
                     lastUi = now;
                     const clock = clockRef.current;
-                    setSnapshot((previous) => Math.floor(previous.clock.minutes) === Math.floor(clock.minutes) && previous.clock.day === clock.day && previous.clock.playing === clock.playing && previous.clock.rate.id === clock.rate.id && Math.round(previous.vehicles) === Math.round(vehicles) ? previous : { clock, vehicles });
+                    setSnapshot((previous) => Math.floor(previous.clock.minutes) === Math.floor(clock.minutes) && previous.clock.day === clock.day && previous.clock.date === clock.date && previous.clock.playing === clock.playing && previous.clock.rate.id === clock.rate.id && Math.round(previous.vehicles) === Math.round(vehicles) ? previous : { clock, vehicles });
                 }
                 if (!visualMoving && (preference.matches || !clockRef.current.playing) && Math.abs(dim - (highlighted.size && pieces.length ? 1 : 0)) < 0.01)
                     timer = window.setTimeout(() => tick(performance.now()), 250);

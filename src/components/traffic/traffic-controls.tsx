@@ -1,8 +1,8 @@
 "use client";
 import { useLayoutEffect, useRef, useState } from "react";
-import { CLOCK_RATES, torontoNow, type ClockState } from "@/lib/traffic/clock";
+import { CLOCK_RATES, clockOnDate, torontoNow, type ClockState } from "@/lib/traffic/clock";
 import { formatClock, MINUTES_PER_DAY } from "@/lib/traffic/model";
-import type { DayType } from "@/lib/traffic/types";
+import SimulationDatePicker from "./simulation-date-picker";
 import GlassSurface from "../glass-surface";
 import SlidingControl from "../sliding-control";
 const TICKS = [0, 360, 720, 1080, 1440];
@@ -53,8 +53,11 @@ export default function TrafficControls({ clock, profile, vehicles, closures, sc
         const rate = CLOCK_RATES.find((item) => item.id === id) ?? CLOCK_RATES[1];
         onChange(rate.id === "live" ? { rate, playing: true, ...torontoNow() } : { rate, playing: true });
     };
-    const chooseDay = (day: DayType) => onChange({ day, rate: live ? CLOCK_RATES[1] : clock.rate });
-    return (<div ref={shellRef} className="traffic-controls-shell" data-map-ui data-minimized={minimized}><GlassSurface variant="panel"><section className="traffic-controls" aria-label="Typical traffic playback">
+    const chooseDate = (date: string) => {
+        const next = clockOnDate(clock, date);
+        onChange({ date: next.date, day: next.day, rate: next.rate });
+    };
+    return (<div ref={shellRef} className="traffic-controls-shell" data-map-ui data-minimized={minimized}><GlassSurface variant="panel"><section className="traffic-controls" aria-label="Traffic simulation playback">
       <button type="button" className="traffic-minimize" aria-expanded={!minimized} aria-label={minimized ? "Expand traffic controls" : "Minimize traffic controls"} title={minimized ? "Expand traffic controls" : "Minimize traffic controls"} onClick={toggleMinimized}>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={minimized ? "m6 15 6-6 6 6" : "m6 9 6 6 6-6"} /></svg>
       </button>
@@ -62,17 +65,15 @@ export default function TrafficControls({ clock, profile, vehicles, closures, sc
         <button type="button" className="traffic-play" aria-label={clock.playing ? "Pause traffic playback" : "Play traffic playback"} onClick={() => onChange({ playing: !clock.playing })}>
           {clock.playing ? (<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="2" width="3.5" height="12" rx="1"/><rect x="9.5" y="2" width="3.5" height="12" rx="1"/></svg>) : (<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.2v11.6a.7.7 0 0 0 1.06.6l9.3-5.8a.7.7 0 0 0 0-1.2l-9.3-5.8A.7.7 0 0 0 4 2.2z"/></svg>)}
         </button>
+        <div className="traffic-clock-group">
         <div className="traffic-clock">
           <strong aria-live="off">{formatClock(clock.minutes)}</strong>
           <span>
             Typical {clock.day} · {live ? "current Toronto time" : "playback"}
           </span>
         </div>
-        <SlidingControl className="traffic-segmented" label="Day type" value={clock.day}>
-          {(["weekday", "weekend"] as const).map((day) => (<button key={day} type="button" aria-pressed={clock.day === day} onClick={() => chooseDay(day)}>
-              {day === "weekday" ? "Weekday" : "Weekend"}
-            </button>))}
-        </SlidingControl>
+        <SimulationDatePicker value={clock.date} onChange={chooseDate} />
+        </div>
         <SlidingControl className="traffic-segmented" label="Playback speed" value={clock.rate.id}>
           {CLOCK_RATES.map((rate) => (<button key={rate.id} type="button" aria-pressed={clock.rate.id === rate.id} onClick={() => chooseRate(rate.id)}>
               {rate.label}

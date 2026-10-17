@@ -270,6 +270,158 @@ button {
   align-items: flex-start;
   gap: 12px;
   color: var(--ui-ink);
+  width: 48px;
+  height: 48px;
+}
+
+.closure-toolbox .toolbox-morph {
+  position: absolute;
+  top: 0;
+  left: 60px;
+  max-width: calc(100vw - 88px);
+  pointer-events: none;
+}
+
+.closure-toolbox .toolbox-morph[data-open="true"] {
+  pointer-events: auto;
+}
+
+.closure-toolbox .toolbox-morph > .toolbox-panel {
+  max-width: calc(100vw - 88px);
+}
+
+.weather-menu {
+  position: absolute;
+  z-index: 3;
+  top: 142px;
+  left: 16px;
+  width: 48px;
+  color: var(--ui-ink);
+}
+
+.weather-menu .weather-panel {
+  position: absolute;
+  top: 0;
+  left: 60px;
+  width: min(282px, calc(100vw - 88px));
+  max-height: calc(100dvh - 200px);
+  overflow-y: auto;
+}
+
+.weather-active-dot {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ui-accent);
+  pointer-events: none;
+}
+
+.weather-menu button,
+.weather-menu input {
+  color: inherit;
+  font: inherit;
+}
+
+.weather-menu button {
+  cursor: pointer;
+}
+
+.weather-menu :is(button, input):focus-visible {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: 3px;
+}
+
+.weather-summary {
+  margin: 12px 0 20px;
+  color: var(--ui-accent);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.weather-slider-group + .weather-slider-group {
+  margin-top: 20px;
+}
+
+.weather-slider-heading,
+.weather-slider-heading label,
+.weather-slider-scale {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.weather-slider-heading label {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.weather-slider-heading output {
+  color: var(--ui-muted);
+  font-size: 11px;
+  text-align: right;
+}
+
+.weather-slider-heading output span {
+  display: block;
+  color: var(--ui-accent);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.weather-slider-group input {
+  display: block;
+  width: 100%;
+  height: 36px;
+  margin: 4px 0 0;
+  accent-color: var(--ui-accent);
+  cursor: pointer;
+}
+
+.weather-slider-scale {
+  color: var(--ui-muted);
+  font-size: 10px;
+}
+
+.weather-menu .weather-clear {
+  width: 100%;
+  min-height: 40px;
+  margin-top: 24px;
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--ui-accent) 9%, transparent);
+  color: var(--ui-accent);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.weather-menu .weather-clear:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.weather-note {
+  margin: 12px 0 0;
+  color: var(--ui-muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.weather-atmosphere,
+.weather-precipitation {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.weather-atmosphere {
+  z-index: 1;
 }
 
 .closure-toolbox button,
@@ -369,6 +521,7 @@ button {
 
 .toolbox-count {
   position: absolute;
+  z-index: 2;
   top: -5px;
   right: -5px;
   display: grid;
@@ -383,6 +536,9 @@ button {
   color: #fff;
   font-size: 10px;
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  pointer-events: none;
 }
 
 .toolbox-panel,
@@ -1231,6 +1387,182 @@ button {
   min-width: 170px;
 }
 
+.traffic-clock-group {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 12px;
+}
+
+.traffic-clock-group .traffic-clock {
+  min-width: 120px;
+}
+
+.simulation-date-trigger {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  background: rgb(186 218 239 / 26%);
+  white-space: nowrap;
+}
+
+.simulation-date-trigger span {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.simulation-date-trigger:hover,
+.simulation-date-trigger[aria-expanded="true"] {
+  background: color-mix(in srgb, var(--ui-accent) 12%, var(--glass-panel-tint));
+}
+
+.simulation-calendar {
+  position: fixed;
+  z-index: 10;
+  width: min(320px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
+  padding: 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: 24px;
+  background: var(--glass-panel-tint);
+  box-shadow: var(--glass-shadow);
+  color: var(--ui-ink);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+}
+
+.simulation-calendar button,
+.simulation-calendar select {
+  min-height: 40px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.simulation-calendar button:hover,
+.simulation-calendar select:hover {
+  background: color-mix(in srgb, var(--ui-accent) 10%, transparent);
+}
+
+.simulation-calendar :is(button, select):focus-visible {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: -2px;
+}
+
+.simulation-calendar-heading,
+.simulation-calendar-navigation,
+.simulation-calendar-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+.simulation-calendar-heading > span {
+  padding-left: 6px;
+  color: var(--ui-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.simulation-calendar .simulation-calendar-close {
+  width: 40px;
+  font-size: 22px;
+}
+
+.simulation-calendar-navigation > button {
+  flex: none;
+  width: 40px;
+  font-size: 24px;
+}
+
+.simulation-calendar-month {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.simulation-calendar-month select {
+  max-width: 130px;
+  padding: 0 4px;
+  font-weight: 600;
+}
+
+.simulation-calendar-month option {
+  background: var(--glass-panel-tint);
+  color: var(--ui-ink);
+}
+
+.simulation-calendar-week {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 2px;
+}
+
+.simulation-calendar-week [role="columnheader"] {
+  padding: 8px 0;
+  color: var(--ui-muted);
+  font-size: 11px;
+  text-align: center;
+}
+
+.simulation-calendar-week button {
+  padding: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.simulation-calendar-week [data-outside="true"] {
+  color: color-mix(in srgb, var(--ui-muted) 60%, transparent);
+}
+
+.simulation-calendar-week [aria-current="date"] {
+  box-shadow: inset 0 0 0 1px var(--ui-accent);
+  font-weight: 700;
+}
+
+.simulation-calendar-week [aria-selected="true"] {
+  background: var(--ui-accent);
+  color: var(--glass-panel-tint);
+  font-weight: 700;
+}
+
+.simulation-calendar-week [aria-selected="true"]:hover {
+  background: var(--ui-ink);
+}
+
+.simulation-calendar-footer {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--glass-border);
+  color: var(--ui-muted);
+  font-size: 11px;
+}
+
+.simulation-calendar-footer button {
+  padding: 0 10px;
+  color: var(--ui-accent);
+  font-weight: 600;
+}
+
+.simulation-calendar-note {
+  margin: 4px 6px 0;
+  color: var(--ui-muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
 .traffic-clock strong {
   font-size: 22px;
   font-variant-numeric: tabular-nums;
@@ -1931,7 +2263,6 @@ button {
   margin: 6px 0 0 8px;
 }
 
-/* Toolbox morph: the button and the panel are one glass element whose size and corners spring between the two. */
 .toolbox-morph {
   position: relative;
   overflow: hidden;
@@ -1946,7 +2277,6 @@ button {
   background: var(--glass-panel-tint);
 }
 
-/* Both states sit at the top-left of the container, which reveals the panel as it grows. */
 .closure-toolbox .toolbox-morph > :is(.toolbox-toggle, .toolbox-panel) {
   position: absolute;
   top: 0;
@@ -1957,7 +2287,6 @@ button {
   pointer-events: none;
 }
 
-/* The container carries the glass; its button and panel contents stay transparent so nothing is drawn twice. */
 .closure-toolbox .toolbox-morph > :is(.toolbox-toggle, .toolbox-panel) {
   border-color: transparent;
   background: transparent;
@@ -2036,6 +2365,35 @@ button {
 
 .traffic-controls-shell[data-minimized="true"] .traffic-clock strong {
   font-size: 20px;
+}
+
+.traffic-controls-shell[data-minimized="true"] .traffic-clock-group {
+  gap: 6px;
+}
+
+.traffic-controls-shell[data-minimized="true"] .simulation-date-trigger {
+  width: 36px;
+  min-height: 40px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.traffic-controls-shell[data-minimized="true"] .simulation-date-trigger :is(span, .simulation-date-chevron) {
+  display: none;
+}
+
+@media (max-width: 680px) {
+  .traffic-controls-shell[data-minimized="false"] .traffic-clock-group {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .traffic-controls-shell[data-minimized="false"] .simulation-date-trigger {
+    min-height: 36px;
+    padding: 4px 8px;
+  }
 }
 
 .disruption-endpoints {

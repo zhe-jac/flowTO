@@ -45,11 +45,11 @@ test("congestion levels and speeds worsen as volume approaches capacity", () => 
 test("clock helpers format time, wrap the day and follow Toronto time when live", () => {
     assert.equal(formatClock(0), "12:00 AM");
     assert.equal(formatClock(17 * 60 + 5), "5:05 PM");
-    const state = { minutes: 1439, day: "weekday" as const, playing: true, rate: CLOCK_RATES[1] };
+    const state = { date: "2026-10-16", minutes: 1439, day: "weekday" as const, playing: true, rate: CLOCK_RATES[1] };
     assert.ok(Math.abs(advanceClock(state, 2).minutes - 1) < 1e-9);
     assert.equal(advanceClock({ ...state, playing: false }, 2).minutes, 1439);
     const noonUtc = new Date("2026-10-17T16:30:00Z");
-    assert.deepEqual(torontoNow(noonUtc), { minutes: 12 * 60 + 30, day: "weekend" });
+    assert.deepEqual(torontoNow(noonUtc), { date: "2026-10-17", minutes: 12 * 60 + 30, day: "weekend" });
 });
 test("travel direction names the compass heading", () => {
     assert.equal(travelDirection([-79.4, 43.65], [-79.39, 43.65]), "Eastbound");
