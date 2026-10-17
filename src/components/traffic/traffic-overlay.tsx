@@ -14,11 +14,13 @@ import { CLASS_WIDTHS, LEVEL_COLORS } from "@/lib/traffic/colors";
 import { closedRoadIds } from "@/lib/traffic/disruptions";
 import { continuousPulseOffset, PULSE_SPACING } from "@/lib/traffic/flow-motion";
 import { createTrafficViewport } from "@/lib/traffic/viewport";
-import { directionState, profileShare, vehiclesOnRoad } from "@/lib/traffic/model";
+import { profileShare } from "@/lib/traffic/model";
 import type { TrafficData, TrafficSegment } from "@/lib/traffic/types";
 import { FlowPathLayer } from "./flow-path-layer";
 import RoadPanel from "./road-panel";
 import TrafficControls from "./traffic-controls";
+import { impactedState } from "@/lib/traffic/rerouting";
+import { useRerouting } from "./use-rerouting";
 const FLAT_DEPTH = { depthCompare: "always", depthWriteEnabled: false } as const;
 const TILTED_DEPTH = { depthCompare: "less-equal", depthWriteEnabled: false } as const;
 const OFFSET_EXTENSION = new PathStyleExtension({ offset: true });
@@ -65,22 +67,25 @@ export default function TrafficOverlay({ map, renderer, items, interacting, onTh
     const [retry, setRetry] = useState(0);
     const [selected, setSelected] = useState<number | null>(null);
     const [snapshot, setSnapshot] = useState<Snapshot>(() => ({ clock: initialTrafficClock(window.location.search), vehicles: 0 }));
+    const rerouting = useRerouting(items, snapshot.clock.day, snapshot.clock.minutes);
+    const impacts = rerouting.plan?.impacts;
+    const impactKey = JSON.stringify(impacts ?? {});
     const theme = simulatorTheme(snapshot.clock.minutes);
     useEffect(() => { onThemeChange(theme); }, [theme, onThemeChange]);
     const clockRef = useRef(snapshot.clock);
     const selectedRef = useRef<number | null>(null);
     const redrawRef = useRef<() => void>(() => { });
     const closed = useMemo(() => closedRoadIds(items), [items]);
-    const closureKey = [...closed].sort().join(",");
-    const latestRef = useRef({ closed, closureKey, interacting });
+    const closureKey = [...closed].sort().join(",") + impactKey;
+    const latestRef = useRef({ closed, closureKey, interacting, impacts });
     useEffect(() => {
-        latestRef.current = { closed, closureKey, interacting };
+        latestRef.current = { closed, closureKey, interacting, impacts };
         if (interacting) {
             selectedRef.current = null;
             setSelected(null);
         }
         redrawRef.current();
-    }, [closed, closureKey, interacting]);
+    }, [closed, closureKey, interacting, impacts]);
     useEffect(() => {
         selectedRef.current = selected;
         redrawRef.current();
@@ -143,8 +148,8 @@ export default function TrafficOverlay({ map, renderer, items, interacting, onTh
             stateDay = day;
             stateClosures = closureKey;
             const share = profileShare(data.profiles[day], minutes);
-            const states = segments.map((segment) => directionState(segment, share, day));
-            vehicles = segments.reduce((sum, segment) => sum + (closed.has(segment.id) ? 0 : vehiclesOnRoad(segment, share, day)), 0);
+            const states = segments.map((segment) => impactedState(segment, share, day, latestRef.current.impacts?.[segment.id]));
+            vehicles = segments.reduce((sum, segment, i) => sum + (closed.has(segment.id) ? 0 : states[i].flow / Math.max(1, states[i].speedKmh) * segment.lengthM / 1000 * (segment.oneway === 0 ? 2 : 1)), 0);
             let colorsChanged = false;
             let speedsChanged = false;
             flows.forEach((flow, index) => {
@@ -288,7 +293,8 @@ export default function TrafficOverlay({ map, renderer, items, interacting, onTh
     const selectedSegment = data && selected !== null && !interacting ? data.segments[selected] : null;
     return (<div className="traffic-ui" data-interacting={interacting}>
       {data ? <TrafficControls clock={snapshot.clock} profile={data.profiles[snapshot.clock.day]} vehicles={snapshot.vehicles} closures={closed.size} onChange={updateClock}/> : null}
-      {selectedSegment && data ? <RoadPanel segment={selectedSegment} data={data} clock={snapshot.clock} closed={closed.has(selectedSegment.id)} onClose={() => setSelected(null)}/> : null}
+      {selectedSegment && data ? <RoadPanel segment={selectedSegment} data={data} clock={snapshot.clock} impact={impacts?.[selectedSegment.id]} closed={closed.has(selectedSegment.id)} onClose={() => setSelected(null)}/> : null}
+      {items.length > 0 ? <p className="traffic-status rerouting-status" role="status">{rerouting.loading ? "Estimating traffic diversions…" : rerouting.error ?? rerouting.plan?.warning ?? rerouting.plan?.summary} <span>Scenario estimate · all disruptions active.</span>{rerouting.error || rerouting.plan?.warning ? <button type="button" onClick={rerouting.retry}>Retry</button> : null}</p> : null}
       {!data && !error ? <p className="traffic-status" role="status">Loading typical traffic…</p> : null}
       {error ? <p className="traffic-status traffic-status-error" role="alert">{error} <button type="button" onClick={() => { setError(null); setRetry((value) => value + 1); }}>Retry</button></p> : null}
     </div>);

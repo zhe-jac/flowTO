@@ -316,6 +316,15 @@ export default function DisruptionToolbox({ map, onItemsChange, onInteractionCha
     toolButtonsRef.current.get(draft.kind)?.focus();
   }
 
+  function resetScenario() {
+    cancelRef.current();
+    itemsRef.current = [];
+    setItems([]);
+    setDraft(null);
+    setFormError("");
+    setNotice("All disruptions removed. Baseline traffic restored.");
+  }
+
   const existing = !!draft && items.some((item) => item.id === draft.id);
 
   return (
@@ -328,6 +337,7 @@ export default function DisruptionToolbox({ map, onItemsChange, onInteractionCha
           <div className="toolbox-heading"><div><span className="toolbox-eyebrow">PLAN ON THE MAP</span><h2>Toolbox</h2></div><button className="toolbox-close" type="button" aria-label="Close toolbox" onClick={toggleToolbox}><DisruptionIcon kind="close" /></button></div>
           <div className="disruption-tool-grid">{DISRUPTION_TOOLS.map((tool) => <button key={tool.kind} ref={(node) => { if (node) toolButtonsRef.current.set(tool.kind, node); else toolButtonsRef.current.delete(tool.kind); }} className="closure-drag-tool" type="button" data-kind={tool.kind} disabled={tool.kind !== "event" && loadState !== "ready"} aria-pressed={activeTool === tool.kind} aria-describedby="disruption-tool-help" onPointerDown={(event) => startDrag(event, tool.kind)} onClick={(event) => { if (event.detail === 0) activateRef.current(tool.kind); }}><span className="closure-tool-icon"><DisruptionIcon kind={tool.kind} /></span><strong>{tool.label}</strong><small>{tool.hint}</small><span className="closure-grip" aria-hidden="true">⠿</span></button>)}</div>
           <p id="disruption-tool-help" className="toolbox-help">Drag a tool onto the map, or click a tool and then a location. Drag placed markers to move them.</p>
+          <button className="scenario-reset" type="button" disabled={!items.length && !draft && !activeTool && !ghost} onClick={resetScenario} title="Remove all disruptions and restore baseline traffic">Reset</button>
           {loadState === "loading" ? <p className="toolbox-loading" role="status">Loading streets for road tools…</p> : null}
           {loadState === "error" ? <p className="toolbox-load-error" role="alert">Street tools could not load. Events are still available. <button type="button" onClick={() => setRetry((value) => value + 1)}>Try again</button></p> : null}
           <div className="toolbox-coverage"><span>Street tools: downtown</span><button type="button" onClick={() => map.fitBounds([[-79.435, 43.63], [-79.345, 43.685]], { padding: { top: 100, bottom: 80, left: Math.min(340, map.getCanvas().clientWidth / 3), right: 60 }, duration: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 700 })}>Show area <span aria-hidden="true">↗</span></button></div>

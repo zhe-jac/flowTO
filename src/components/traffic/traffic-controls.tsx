@@ -1,8 +1,10 @@
 "use client";
+import { useState } from "react";
 import { CLOCK_RATES, torontoNow, type ClockState } from "@/lib/traffic/clock";
 import { formatClock, MINUTES_PER_DAY } from "@/lib/traffic/model";
 import type { DayType } from "@/lib/traffic/types";
 import GlassSurface from "../glass-surface";
+import SlidingControl from "../sliding-control";
 const TICKS = [0, 360, 720, 1080, 1440];
 function profilePath(profile: number[], width: number, height: number) {
     const max = Math.max(...profile);
@@ -17,6 +19,7 @@ type Props = {
     onChange: (change: Partial<ClockState>) => void;
 };
 export default function TrafficControls({ clock, profile, vehicles, closures, onChange }: Props) {
+    const [scrubbing, setScrubbing] = useState(false);
     const live = clock.rate.id === "live";
     const chooseRate = (id: string) => {
         const rate = CLOCK_RATES.find((item) => item.id === id) ?? CLOCK_RATES[1];
@@ -34,23 +37,24 @@ export default function TrafficControls({ clock, profile, vehicles, closures, on
             Typical {clock.day} · {live ? "current Toronto time" : "playback"}
           </span>
         </div>
-        <div className="traffic-segmented" role="group" aria-label="Day type">
+        <SlidingControl className="traffic-segmented" label="Day type" value={clock.day}>
           {(["weekday", "weekend"] as const).map((day) => (<button key={day} type="button" aria-pressed={clock.day === day} onClick={() => chooseDay(day)}>
               {day === "weekday" ? "Weekday" : "Weekend"}
             </button>))}
-        </div>
-        <div className="traffic-segmented" role="group" aria-label="Playback speed">
+        </SlidingControl>
+        <SlidingControl className="traffic-segmented" label="Playback speed" value={clock.rate.id}>
           {CLOCK_RATES.map((rate) => (<button key={rate.id} type="button" aria-pressed={clock.rate.id === rate.id} onClick={() => chooseRate(rate.id)}>
               {rate.label}
             </button>))}
-        </div>
+        </SlidingControl>
       </div>
-      <p className="traffic-estimate">Estimated traffic · ≈ {Math.round(vehicles).toLocaleString()} vehicles on roads{closures ? ` · ${closures} full ${closures === 1 ? "closure" : "closures"} applied, without rerouting` : ""}</p>
-      <div className="traffic-timeline">
+      <p className="traffic-estimate">Estimated traffic · ≈ {Math.round(vehicles).toLocaleString()} vehicles on roads{closures ? ` · ${closures} full ${closures === 1 ? "closure" : "closures"} applied` : ""}</p>
+      <div className="traffic-timeline" data-scrubbing={scrubbing}>
+        <div className="traffic-time-indicator-track" aria-hidden="true"><span className="traffic-time-indicator" style={{ left: `${Math.floor(clock.minutes) / (MINUTES_PER_DAY - 1) * 100}%` }} /></div>
         <svg className="traffic-profile" viewBox="0 0 960 34" preserveAspectRatio="none" aria-hidden="true">
           <path d={profilePath(profile, 960, 34)}/>
         </svg>
-        <input type="range" min={0} max={MINUTES_PER_DAY - 1} step={1} value={Math.floor(clock.minutes)} aria-label="Time of day" aria-valuetext={formatClock(clock.minutes)} onChange={(event) => onChange({ minutes: Number(event.target.value), rate: live ? CLOCK_RATES[1] : clock.rate })}/>
+        <input type="range" min={0} max={MINUTES_PER_DAY - 1} step={1} value={Math.floor(clock.minutes)} aria-label="Time of day" aria-valuetext={formatClock(clock.minutes)} onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); setScrubbing(true); }} onPointerUp={() => setScrubbing(false)} onPointerCancel={() => setScrubbing(false)} onLostPointerCapture={() => setScrubbing(false)} onBlur={() => setScrubbing(false)} onChange={(event) => onChange({ minutes: Number(event.target.value), rate: live ? CLOCK_RATES[1] : clock.rate })}/>
         <div className="traffic-ticks" aria-hidden="true">
           {TICKS.map((minute) => <span key={minute}>{minute === 1440 ? "12 AM" : formatClock(minute).replace(":00", "")}</span>)}
         </div>

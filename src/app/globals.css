@@ -1779,3 +1779,112 @@ button {
     --glass-border: #64849c;
   }
 }
+
+.rerouting-status { bottom: 170px; max-width: min(520px, calc(100% - 32px)); }
+.rerouting-status span { display: block; opacity: 0.7; margin-top: 4px; }
+
+.closure-toolbox .scenario-reset {
+  font: 650 12px "Avenir Next", "Segoe UI", sans-serif;
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  background: var(--glass-panel-tint);
+  color: var(--ui-ink);
+}
+
+.scenario-reset:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* A shared highlight moves between the selected buttons, including wrapped rows. */
+.sliding-control {
+  position: relative;
+  isolation: isolate;
+}
+
+.sliding-control-highlight {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 0;
+  border-radius: 9px;
+  background: rgb(255 255 255 / 80%);
+  box-shadow: 0 1px 4px rgb(38 78 105 / 10%);
+  pointer-events: none;
+  transition: transform 420ms cubic-bezier(0.22, 1, 0.36, 1), width 420ms cubic-bezier(0.22, 1, 0.36, 1), height 420ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.map-view-toggle .sliding-control-highlight {
+  border: 1px solid rgb(255 255 255 / 90%);
+  border-radius: 11px;
+  background: rgb(191 226 250 / 55%);
+  box-shadow: 0 2px 6px rgb(52 103 140 / 10%), var(--glass-inner);
+}
+
+.sliding-control > button {
+  position: relative;
+  z-index: 1;
+  transition: color 180ms ease;
+}
+
+:root .sliding-control[data-measured="true"] > button[aria-pressed="true"] {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+:root[data-sim-theme="night"] .sliding-control-highlight {
+  border-color: rgb(154 199 230 / 30%);
+  background: rgb(89 145 185 / 30%);
+}
+
+.traffic-time-indicator-track {
+  position: absolute;
+  top: 3px;
+  left: 7px;
+  right: 7px;
+  height: 32px;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.traffic-time-indicator {
+  position: absolute;
+  width: 14px;
+  height: 32px;
+  border: 3px solid #f0f8fe;
+  border-radius: 8px;
+  background: #36799f;
+  box-shadow: 0 1px 5px rgb(38 78 105 / 20%);
+  transform: translateX(-50%);
+  transition: left 220ms ease-out;
+}
+
+.traffic-timeline input[type="range"]::-webkit-slider-thumb {
+  opacity: 0;
+}
+
+.traffic-timeline input[type="range"]::-moz-range-thumb {
+  width: 14px;
+  box-sizing: border-box;
+  opacity: 0;
+}
+
+.traffic-timeline[data-scrubbing="true"] .traffic-time-indicator {
+  transition: none;
+}
+
+:root[data-sim-theme="night"] .traffic-time-indicator {
+  border-color: #294960;
+  background: #b4dcf6;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sliding-control-highlight,
+  .sliding-control > button,
+  .traffic-time-indicator {
+    transition: none;
+  }
+}
