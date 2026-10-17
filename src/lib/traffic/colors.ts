@@ -20,3 +20,11 @@ export const CLASS_WIDTHS: Record<string, number> = {
   "Collector Ramp": 2.8,
   Local: 2.2,
 };
+
+/** Saturated versions used to make roads affected by a scenario stand out from the rest. */
+export const VIVID_COLORS: Record<CongestionLevel, Rgb> = {
+  free: [0, 205, 128],
+  moderate: [255, 200, 0],
+  heavy: [255, 112, 0],
+  severe: [255, 36, 48],
+};

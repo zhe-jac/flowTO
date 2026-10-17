@@ -16,9 +16,11 @@ type Props = {
     profile: number[];
     vehicles: number;
     closures: number;
+    /** Short status of the active disruption scenario, shown inside the controls instead of a separate card. */
+    scenario?: { text: string; retry?: () => void; compare: "before" | "after"; onCompare: (mode: "before" | "after") => void } | null;
     onChange: (change: Partial<ClockState>) => void;
 };
-export default function TrafficControls({ clock, profile, vehicles, closures, onChange }: Props) {
+export default function TrafficControls({ clock, profile, vehicles, closures, scenario, onChange }: Props) {
     const [scrubbing, setScrubbing] = useState(false);
     const live = clock.rate.id === "live";
     const chooseRate = (id: string) => {
@@ -48,7 +50,10 @@ export default function TrafficControls({ clock, profile, vehicles, closures, on
             </button>))}
         </SlidingControl>
       </div>
-      <p className="traffic-estimate">Estimated traffic · ≈ {Math.round(vehicles).toLocaleString()} vehicles on roads{closures ? ` · ${closures} full ${closures === 1 ? "closure" : "closures"} applied` : ""}</p>
+      {scenario ? <div className="traffic-segmented traffic-compare" role="group" aria-label="Compare with normal traffic">
+        {(["before", "after"] as const).map((mode) => <button key={mode} type="button" aria-pressed={scenario.compare === mode} onClick={() => scenario.onCompare(mode)}>{mode === "before" ? "Before" : "After"}</button>)}
+      </div> : null}
+      <p className="traffic-estimate">Estimated traffic · ≈ {Math.round(vehicles).toLocaleString()} vehicles on roads{closures ? ` · ${closures} full ${closures === 1 ? "closure" : "closures"} applied` : ""}{scenario ? <> · {scenario.text}{scenario.retry ? <> <button type="button" className="traffic-estimate-retry" onClick={scenario.retry}>Retry</button></> : null}</> : null}</p>
       <div className="traffic-timeline" data-scrubbing={scrubbing}>
         <div className="traffic-time-indicator-track" aria-hidden="true"><span className="traffic-time-indicator" style={{ left: `${Math.floor(clock.minutes) / (MINUTES_PER_DAY - 1) * 100}%` }} /></div>
         <svg className="traffic-profile" viewBox="0 0 960 34" preserveAspectRatio="none" aria-hidden="true">

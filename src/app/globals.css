@@ -1566,7 +1566,8 @@ button {
 }
 
 .map-page:has(.traffic-controls-shell) .closure-notice {
-  bottom: 210px;
+  top: 20px;
+  bottom: auto;
 }
 
 .map-page:has(.traffic-controls-shell) .toolbox-panel {
@@ -1902,4 +1903,26 @@ button {
   .traffic-time-indicator {
     transition: none;
   }
+}
+
+/* Toasts sit at the top so they never stack on the traffic controls. */
+.closure-notice {
+  top: 20px;
+  bottom: auto;
+}
+
+.traffic-estimate-retry {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ui-accent);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.traffic-compare {
+  float: right;
+  margin: 6px 0 0 8px;
 }
