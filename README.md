@@ -1,190 +1,241 @@
 # Toronto Traffic Sandbox
 
-**SimCity for real Toronto streets.** Drop a road closure, a lane reduction, a snowstorm or a Jays game onto a map of the City of Toronto, press play, and watch how traffic responds next to an identical city where nothing changed.
+**Test how Toronto's road closures, construction, and events affect the people moving through the city.** Create a scenario, inspect car and TTC impacts, compare alternatives, and share the result on an interactive 2D or 3D map.
 
-> Built at Hack the Valley 2026 for the **Hack the Valley x School of Cities** civic-tech track.
-> Status: 🚧 in development. See [ROADMAP.md](ROADMAP.md) for the full plan and progress.
-
----
+> Planned for Hack the Valley 2026 and the **Hack the Valley x School of Cities** civic-tech track.
+> **Status: planning.** This repository currently contains project documentation; the app, data pipeline, and setup scripts have not been implemented. Features below describe the intended product.
+> This README reflects the revised product direction. [ROADMAP.md](ROADMAP.md) contains the earlier implementation plan and still needs to be reconciled with this scope, especially TTC support and prototype priorities.
 
 ## Why
 
-Toronto votes on **October 26, 2026**, and congestion, construction, bike lanes and the Gardiner are among the most debated issues in the race. Every platform includes a plan for our roads, but the tools that show what those plans would actually do sit with consultants and transportation departments.
+A construction closure, a street festival, and a bus diversion can each look manageable on their own. Together, they may block an alternative route, interrupt access to a venue, or move disruption onto another neighbourhood.
 
-Residents get press releases. Journalists get quotes. Community groups get a public meeting.
+Toronto Traffic Sandbox will help city staff, event organizers, and the public explore those interactions before a plan is implemented. The shared question is: **what changes, who is affected, and which alternative reduces the disruption?**
 
-Toronto Traffic Sandbox gives everyone the same kind of what-if tool that planners use, built on City of Toronto open data and simple enough to use in a browser.
+For the School of Cities track, the civic problem is how Toronto coordinates street disruption and maintains access during construction and events. The prototype will use Toronto urban data to make those decisions more understandable and actionable in the context of the 2026 municipal election and beyond.
 
-**It tests policies, not candidates.** It does not predict the election, rank candidates or endorse anyone. It makes civic information more useful, accessible and actionable.
+**It tests plans and policies, not candidates.** Scenarios and explanations will remain non-partisan.
 
 ## Who it's for
 
-| User | Question they can answer |
+| User | Question they can explore | Useful outputs |
+|---|---|---|
+| City officials and planners | "Do these construction closures block each other's detours?" | Conflicting diversions, affected TTC routes, access checks, comparison of alternative timings or closures |
+| Event organizers | "Can people reach and leave this venue with these streets closed?" | Venue access, nearby closure conflicts, affected stops, traffic pressure points under stated attendance assumptions |
+| Residents and public users | "What does this plan change for my journey?" | Selected car or transit journey comparisons, affected services, explanations, shareable scenarios |
+| Journalists and community organizations | "What changes if one road stays open?" | A reproducible comparison with visible inputs, affected connections, and assumptions |
+
+## One sandbox, three starting points
+
+All users will work with the same map, scenario model, analysis, and comparison tools.
+
+- **Plan construction:** select road segments, closure or lane-reduction details, and start/end times.
+- **Plan an event:** select a venue or event footprint, closure times, and optional attendance and arrival/departure assumptions.
+- **Explore an impact:** open a preset or shared scenario, select places or journeys, and inspect what changes.
+
+The common workflow is **create → inspect → compare → share**. Manual tools will work independently of AI. A natural-language prompt will offer another way to create and modify scenarios, with a preview of the interpreted roads, times, and changes before applying them.
+
+## First prototype
+
+The initial demo will cover **one well-developed Toronto area**, using real road and TTC geography. Citywide mapping is the longer-term setting; citywide simulation is a performance and data goal, not a requirement for the first demo.
+
+### Core analysis and interaction
+
+- Place multiple road closures or lane reductions with explicit start/end times.
+- Calculate car diversions and identify when one closure blocks another's alternative route.
+- Check whether selected destinations remain reachable within the modeled network.
+- Identify bus and streetcar routes intersecting the affected streets and stops that may lose service under the scenario.
+- Click a warning to highlight the responsible closures, affected connections, supporting data, and assumptions.
+- Compare a baseline with a scenario, or compare two alternatives such as reopening a road or changing a closure's timing.
+- Share a scenario that restores its inputs and assumptions, so another user can inspect the same plan.
+
+### Map and playback
+
+- Start in **2D planning view** for selecting segments, drawing event footprints, and inspecting routes.
+- Add a **3D exploration toggle** using a tilted camera and extruded buildings. Both views will use the same scenario and analysis.
+- Keep closures, detours, TTC routes, and warnings readable in either view; building detail will depend on tile coverage and available heights.
+- Provide time selection and playback to inspect when closures overlap. Vehicle animation will be labeled as schedule-based or simulated, depending on its source.
+- Build the 2D closure workflow first, then add 3D and animation early enough to check performance on team laptops.
+
+### Traffic and TTC simulation target
+
+Alongside the core network checks, aim to demonstrate traffic flows and **a small number of affected surface-transit routes** in the demo area. Congestion estimation must not block a working closure-comparison demo.
+
+- **Cars:** model trips using explicit demand assumptions, road capacities, and routing rules; show estimated changes in travel time and delay when supported by the model.
+- **Buses:** use published schedules as a starting point, test candidate diversions, and check road restrictions and suitability where data is available.
+- **Streetcars:** keep candidate diversions on connected tracks. Where no usable track diversion exists, allow an explicitly hypothetical replacement-bus service.
+- **Transit/traffic interaction:** estimate delays for buses and mixed-traffic streetcars from modeled road conditions, with separate assumptions for stops, dwell time, and service frequency.
+- **Selected transit journeys:** compare access and estimated journey times for the supported routes and services, including waiting and transfers where implemented.
+
+The first prototype will not model passenger crowding, fleet allocation, or systemwide service reliability. Subway service changes will require an explicit transit intervention; nearby road congestion will not automatically slow underground trains.
+
+## Example demo
+
+1. A city staff member places a construction closure in the demo area.
+2. An event organizer adds a nearby event footprint and overlapping street closures.
+3. The sandbox highlights a blocked diversion, an affected TTC route, and changes to selected journeys or venue access.
+4. Clicking a warning reveals which connections caused the conflict and which assumptions affect the result.
+5. The user reopens one segment or changes a closure's timing and compares the alternatives.
+6. A resident opens the shared scenario and inspects their journey in 2D or 3D.
+
+## Results and explanations
+
+Results will distinguish **network checks**, **schedule-based calculations**, and **simulation estimates**.
+
+| Result | Basis |
 |---|---|
-| Residents and voters | "If they close this road, what happens to my commute?" |
-| Journalists | "Show readers, with numbers, which wards a proposal helps or hurts." |
-| Community organizations | "Our neighbourhood absorbs the detour traffic. Here's the evidence." |
-| Planners and policymakers | "Which mitigation recovers the most travel time?" |
+| Blocked diversions and disconnected destinations | Connectivity and routing in the modeled road network |
+| Affected TTC routes and stops | Route/stop matching against closures, checked against service assumptions |
+| Additional route distance | Calculated baseline and alternative paths |
+| Estimated car or transit journey time | Routing costs, schedules, and any stated traffic, waiting, or dwell assumptions |
+| Traffic pressure points and estimated delay | Modeled demand, capacities, and rerouting behavior |
 
-## What it does
+Warnings will explain their reasoning rather than only showing a score. Concrete changes to journeys, transit service, and access will take priority over an abstract ward happiness metric.
 
-- **Live Toronto map in 2D or 3D:** the whole City of Toronto, with 3D buildings, that tilts between a flat planning view and a 3D city view.
-- **Thousands of moving vehicles** routed over the real Toronto road network.
-- **Drag-and-drop interventions:**
-  - road closure
-  - lane reduction
-  - construction zone
-  - collision
-  - event surge (for example, Rogers Centre or Scotiabank Arena letting out)
-  - storm or snow (citywide or within a drawn area)
-- **Before vs. after:** a baseline city and your scenario run on the same random seed, shown side by side with synced cameras, plus a swipe view and a "difference" heatmap.
-- **Time controls:** pick a time window, such as the 7–10 AM rush. Play, pause, run at 1× to 120×, scrub, or jump ahead.
-- **SimCity-style results:**
-  - average trip time
-  - total delay
-  - the worst-hit roads
-  - CO₂ estimate
-  - a **happiness score** for each of Toronto's 25 wards
-- **Describe a scenario in plain English** ("close the Gardiner eastbound from Jarvis to the DVP during a snowstorm at 8 AM") and Gemini turns it into a scenario, then writes a plain-language impact summary.
-- **Shareable scenarios:** every scenario is a link you can send to a neighbour, a reporter or a councillor's office.
+Gemini will translate prompts into validated scenario inputs and explain calculated results. It will not supply unsupported traffic figures or treat a generated diversion as a verified operational plan.
 
-## How it works
+## Planned architecture
 
 ```mermaid
 flowchart LR
-    subgraph Build["Build step: TypeScript scripts"]
-        CKAN["Toronto Open Data<br/>Centreline · Traffic counts · Wards<br/>Neighbourhoods · Road restrictions"] --> NET["Road network graph"]
-        CKAN --> DEM["Travel demand<br/>(trips by time of day)"]
-        NET --> BASE["Baseline routes<br/>(precomputed)"]
-        DEM --> BASE
+    subgraph Build["Build step: TypeScript pipeline"]
+        ROAD["Toronto roads and restrictions"] --> NET["Directed road network"]
+        TTC["TTC GTFS routes and schedules"] --> TRANSIT["Transit routes, stops, service calendars"]
+        COUNTS["Counts and explicit demand assumptions"] --> DEM["Demo-area demand"]
     end
 
     subgraph Browser["Browser: Next.js + React"]
-        UI["Map · tools · timeline · charts"] <--> W1["Web Worker<br/>baseline sim"]
-        UI <--> W2["Web Worker<br/>scenario sim"]
+        UI["2D/3D map, tools, timeline, results"] <--> ANALYSIS["Workers: routing, conflicts, access, transit"]
+        UI <--> SIM["Workers: baseline and scenario simulation"]
     end
 
-    BASE --> W1
-    BASE --> W2
-    UI <--> API["Next.js route handlers<br/>Gemini · saved scenarios"]
+    NET --> ANALYSIS
+    TRANSIT --> ANALYSIS
+    NET --> SIM
+    TRANSIT --> SIM
+    DEM --> SIM
+    UI <--> API["Next.js routes: Gemini, optional saved scenarios"]
 ```
 
-**The simulation** is a mesoscopic, agent-based traffic model written in TypeScript. It runs in Web Workers, so there's no simulation server.
+1. **Road network:** build a directed graph from Toronto Centreline data, checking connectivity, driving directions, and available turn restrictions in the demo area. Document any supplementary data or manual corrections.
+2. **Transit network:** import GTFS routes, stops, trips, stop times, and service calendars. Match relevant surface routes to roads or tracks and validate the demo routes before using them for closure analysis.
+3. **Scenario analysis:** apply time-bounded restrictions, calculate candidate diversions, and check access and conflicts. A route intersecting a closure will trigger investigation; the analysis must consider the actual restriction and service details before claiming service is blocked.
+4. **Simulation:** target a TypeScript mesoscopic model in Web Workers, with precomputed baseline routes and incremental rerouting. BPR link costs are a proposed congestion approximation; queue storage, spillback, and transit stop behavior need explicit modeling and validation.
+5. **Comparison:** use the same seed, starting demand, data version, and assumptions for comparable runs. Event demand or service changes are explicit scenario differences. Compare common trips separately from added event trips so totals remain interpretable.
+6. **Explanation and sharing:** preserve scenario inputs and data/model versions in shared results. A planned Methodology page will document sources, assumptions, validation, and known gaps.
 
-1. **Network:** City of Toronto Centreline segments, filtered to expressways, arterials and collectors, become a directed graph. Each edge has a length, a free-flow speed, a lane count and a capacity.
-2. **Demand:**
-   - Trips are generated between Toronto's 158 neighbourhoods. Origins are weighted by residents and destinations by jobs.
-   - Trips are spread across the day using the time-of-day profile from the City's intersection traffic counts.
-   - Each simulated vehicle represents a fixed number of real vehicles, and that scale factor is shown in the app.
-3. **Congestion:** the travel time on each road segment follows the **BPR function** used in transportation planning:
-   `t = t₀ · (1 + 0.15 · (volume / capacity)⁴)`.
-   More cars mean slower roads.
-4. **Interventions** change the network:
-   - A closure removes edges.
-   - A lane reduction cuts capacity.
-   - Weather lowers free-flow speed and capacity inside an area.
-   - An event injects extra trips.
+## Planned tech stack
 
-   Affected vehicles reroute, and drivers periodically re-plan using current conditions, so congestion spreads realistically.
-5. **Baseline vs. scenario:** both runs use the same seed and demand. Every difference you see is caused by your intervention.
-
-**Happiness** is a 0–100 score per ward, computed from the extra delay residents of that ward experience relative to the baseline, plus penalties for trips that get stuck. The exact formula and every assumption are listed on the in-app **Methodology** page.
-
-## Tech stack
-
-All application and tooling code is TypeScript. There are no hand-written HTML or JavaScript files.
+Application and tooling code will use TypeScript, with TSX for React components.
 
 | Area | Tools |
 |---|---|
-| App framework | Next.js (App Router), React, TypeScript (strict) |
-| Map | MapLibre GL via `react-map-gl`, OpenFreeMap vector tiles (3D building extrusions) |
-| Vehicle and data layers | deck.gl (`TripsLayer`, `ScatterplotLayer`, `PathLayer`, `GeoJsonLayer`) |
-| Simulation | Custom TypeScript engine in Web Workers (`comlink`), `flatbush` spatial index |
+| App framework | Next.js App Router, React, TypeScript strict mode |
+| Map | MapLibre GL via `react-map-gl`, OpenFreeMap vector tiles and building extrusions |
+| Vehicle and data layers | deck.gl for paths, vehicles, event areas, and impact overlays |
+| Analysis and simulation | TypeScript Web Workers, `comlink`, `flatbush`; evaluate model feasibility on the demo area |
 | State | Zustand |
 | UI | Tailwind CSS, shadcn/ui, Recharts |
-| AI | Google Gemini API (`@google/genai`) with structured JSON output |
-| Storage (optional) | Tiger Data (Timescale Postgres) for saved scenarios and run metrics |
-| Data pipeline | TypeScript scripts run with `tsx`, against the Toronto Open Data CKAN API |
-| Quality | Biome (lint + format), Vitest |
-| Hosting | Vercel (and/or Vultr) |
+| AI | Google Gemini API with structured output, validated with `zod` through server routes |
+| Sharing | Encoded scenario URLs; optional storage for larger scenarios or saved results |
+| Storage, optional | Tiger Data / Timescale Postgres |
+| Data pipeline | TypeScript scripts run with `tsx`, Toronto Open Data and GTFS processing |
+| Quality | Biome, TypeScript checks, Vitest for routing and model behavior |
+| Hosting | Vercel initially; Vultr optional |
+
+The 2D/3D view will share one map implementation. A custom photorealistic city engine is outside the prototype scope.
+
+## Planned data sources
+
+Toronto datasets will be sourced from [City of Toronto Open Data](https://open.toronto.ca/) under their applicable licences, including the [Open Government Licence – Toronto](https://open.toronto.ca/open-data-license/) where specified. Resource versions, coverage, and suitability still need verification for the chosen demo area.
+
+| Dataset | Intended use and checks |
+|---|---|
+| Toronto Centreline | Road geometry, names, connectivity, direction attributes; verify usable topology and restrictions |
+| Road Restrictions | Existing restrictions as context; distinguish lane occupations from full closures and record retrieval time |
+| [TTC routes and schedules / GTFS](https://open.toronto.ca/dataset/merged-gtfs-ttc-routes-and-schedules/) | Routes, stops, scheduled trips, and service calendars; validate relevant surface routes and track connectivity |
+| Intersection turning-movement counts | Ground demand assumptions and assess baseline flows where coverage supports comparison |
+| Midblock speed and volume counts | Additional baseline checks where suitable measurements exist |
+| Neighbourhood population and employment data | Optional inputs to synthetic travel demand; document gaps and fallback weights |
+| City boundaries, wards, and neighbourhoods | Geographic context and impact summaries where useful |
+| Selected venues and destinations | Event access and journey examples; identify the source or label manually selected inputs |
+| OpenStreetMap via OpenFreeMap | Basemap and building geometry/heights where available; preserve required attribution |
+
+Schedules describe planned service, not observed operations. Live vehicle positions and alerts may be added later; they do not establish how a hypothetical future disruption would behave.
+
+## Later expansion
+
+- Expand road and transit coverage toward citywide analysis after data and performance checks.
+- Add richer event arrival/departure demand, explicitly distinguishing attendees from vehicle trips and transit passengers.
+- Extend bus diversions, replacement services, and selected transit journey comparisons.
+- Add explicit subway disruptions and their replacement-service scenarios.
+- Add weather, collisions, emissions estimates, and broader policy interventions after the closure workflow is reliable.
+- Add swipe/difference views, exports, and a saved-scenario gallery.
+- Explore automated mitigation suggestions after candidate alternatives can be evaluated consistently.
 
 ## Getting started
 
-> These commands are the target setup. They'll work once the scaffold in Phase 0 of the roadmap lands.
+**The repository is documentation-only today.** The commands and paths below are the intended setup after scaffolding; they are not runnable yet.
 
-**Requirements:** Node.js 22+ and pnpm.
+Planned requirements: Node.js 22+ and pnpm.
 
 ```sh
 pnpm install
-cp .env.example .env.local     # add GEMINI_API_KEY (and TIGER_DATABASE_URL if using saved scenarios)
-pnpm data:build                # download Toronto Open Data and build the network, demand and baseline
-pnpm dev                       # http://localhost:3000
+cp .env.example .env.local
+pnpm data:build
+pnpm dev
 ```
 
-| Script | What it does |
+The planned development server will run at `http://localhost:3000`. Add `GEMINI_API_KEY` to `.env.local` for AI features and `TIGER_DATABASE_URL` only if optional storage is enabled.
+
+| Planned script | Purpose |
 |---|---|
-| `pnpm dev` | Start the dev server |
-| `pnpm build` | Production build |
-| `pnpm data:fetch` | Download raw datasets into `data/raw/` (gitignored) |
-| `pnpm data:build` | Fetch, then build `public/data/` (network, demand, baseline routes, wards) |
-| `pnpm test` | Run Vitest |
-| `pnpm check` | Run Biome lint and format checks, plus a TypeScript type-check |
+| `pnpm dev` | Start the development server |
+| `pnpm build` | Create a production build |
+| `pnpm data:fetch` | Download source data into gitignored `data/raw/` |
+| `pnpm data:build` | Fetch and build browser-ready road, transit, demand, and preset data |
+| `pnpm test` | Check routing, closure interactions, transit constraints, and deterministic model behavior |
+| `pnpm check` | Run Biome and TypeScript checks |
 
-### Environment variables
+Manual scenario creation, network analysis, and local comparison are intended to work without AI or database keys.
 
-| Name | Required | Purpose |
-|---|---|---|
-| `GEMINI_API_KEY` | For AI features | Natural-language scenarios and impact summaries |
-| `TIGER_DATABASE_URL` | Optional | Saved scenarios gallery and run metrics |
+### Planned project structure
 
-The core sandbox (map, tools, simulation, before/after, charts) runs with no keys at all.
-
-## Project structure
-
-```
-scripts/            TypeScript data pipeline (fetch → build network → build demand → baseline)
-data/raw/           downloaded source data (gitignored)
-public/data/        generated, browser-ready network, demand, wards, preset scenarios
-src/app/            Next.js routes and API route handlers (Gemini, scenarios)
-src/components/     map, tool palette, timeline, results panel, charts
-src/sim/            simulation engine, routing, BPR, interventions, metrics, happiness, workers
-src/store/          Zustand stores
-src/lib/            shared types, geo helpers, scenario encoding
+```text
+scripts/
+data/raw/
+public/data/
+src/app/
+src/components/
+src/analysis/
+src/sim/
+src/transit/
+src/store/
+src/lib/
 ```
 
-## Data sources
+Data preparation will live in `scripts/`; routing, access, and conflict checks in `src/analysis/`; traffic modeling in `src/sim/`; and GTFS processing and transit behavior in `src/transit/`. The app will include a Methodology page once implemented.
 
-All data is from **City of Toronto Open Data** under the [Open Government Licence – Toronto](https://open.toronto.ca/open-data-license/), unless noted.
+## Limitations and validation
 
-| Dataset | Used for |
-|---|---|
-| Toronto Centreline (TCL) | Road network: geometry, road class, one-way direction |
-| Traffic volumes at intersections (turning movement counts) | Time-of-day demand profile, baseline calibration |
-| City Wards (25-ward model) | Per-ward results and happiness |
-| Neighbourhoods (158) and Neighbourhood Profiles (2021 Census) | Trip origins (population) |
-| Toronto Employment Survey | Trip destinations (jobs) |
-| Road Restrictions | Real current closures, loadable as scenarios |
-| Cycling Network | Bike-lane scenarios |
-| © OpenStreetMap contributors, via OpenFreeMap | Basemap tiles and 3D building heights |
+This is a planned hackathon prototype for exploring alternatives. Simulation outputs will be directional estimates whose assumptions remain visible.
 
-## Limitations
-
-This is a hackathon prototype, not a forecasting tool. Please read results as **directional, not exact**.
-
-- Demand is synthesized from census, employment and count data, not from a calibrated regional travel model.
-- Local residential streets are excluded for performance, and intersections are modelled through segment capacity, not individual signals.
-- Weather effects use published average speed and capacity reductions.
-- Transit, cyclists and pedestrians are not simulated yet. Only cars are.
-- Results are only as good as the open data behind them. Every assumption is listed on the Methodology page.
+- Network checks are only as complete as the modeled roads, tracks, stops, directions, and restrictions. Missing connections can create false warnings or false reassurance.
+- Candidate diversions need checks for vehicle restrictions, track connections, turns, and stop access. Unverified conditions will be shown as unresolved.
+- Traffic counts do not provide complete origin/destination demand. Synthetic trips, event attendance, mode share, capacities, and dwell times will be labeled as measured inputs or assumptions.
+- Scheduled vehicle animation does not establish congestion delay or operational feasibility. Hypothetical services will be clearly identified.
+- Crowding, detailed signals, fleet constraints, pedestrian/cyclist flows, and network-wide transit reliability are outside the first prototype.
+- Building heights and 3D appearance are visual context, not evidence of model accuracy. The app will retain a usable 2D view.
+- Calibration and validation results will be reported only after they have been measured. The Methodology page will identify data versions, checks performed, and remaining gaps.
 
 ## Neutrality
 
-Preset scenarios describe **policies and events**, never candidates or parties. The app makes no predictions about the election and produces no recommendations about how to vote.
+Scenarios will describe closures, events, service changes, and policies. The product will make no election predictions, rank no candidates, and offer no voting recommendations. AI explanations will be grounded in scenario results and state relevant uncertainty.
 
 ## Team
 
-Built by a team of three at Hack the Valley 2026.
+A team of three building for Hack the Valley 2026.
 
 ## License
 
-MIT
+Intended code licence: MIT. A `LICENSE` file has not yet been added. Data and basemap assets retain their respective licences and attribution requirements.
