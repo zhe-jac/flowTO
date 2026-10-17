@@ -1,9 +1,9 @@
-import { weatherIntensity, type WeatherState } from "./weather";
+import { weatherIntensity, RAIN_ANCHORS, SNOW_ANCHORS, type WeatherRates, type WeatherState } from "./weather";
 
 export const WEATHER_REFRESH_MS = 15 * 60 * 1000;
 export const TORONTO_WEATHER_URL = "https://api.open-meteo.com/v1/forecast?latitude=43.6532&longitude=-79.3832&current=rain,showers,snowfall&timezone=America%2FToronto&timeformat=unixtime&forecast_days=1";
 export type WeatherMode = "current" | "manual";
-export type TorontoWeather = { rainMmPerHour: number; snowCmPerHour: number; validAt: string; fetchedAt: string };
+export type TorontoWeather = WeatherRates & { validAt: string; fetchedAt: string };
 
 const record = (value: unknown): Record<string, unknown> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 const nonnegative = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value) && value >= 0;
@@ -35,7 +35,7 @@ function visualIntensity(rate: number, anchors: readonly (readonly [number, numb
 
 export function weatherFromReading(reading: TorontoWeather): WeatherState {
   return {
-    rain: visualIntensity(reading.rainMmPerHour, [[0, 0], [0.1, 8], [0.5, 20], [2.5, 45], [7.5, 75], [15, 100]]),
-    snow: visualIntensity(reading.snowCmPerHour, [[0, 0], [0.1, 10], [0.5, 30], [1, 50], [2.5, 80], [5, 100]]),
+    rain: visualIntensity(reading.rainMmPerHour, RAIN_ANCHORS),
+    snow: visualIntensity(reading.snowCmPerHour, SNOW_ANCHORS),
   };
 }

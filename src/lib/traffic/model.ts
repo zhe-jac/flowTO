@@ -1,3 +1,5 @@
+import { DRY_WEATHER, type WeatherRates } from "../weather";
+import { weatherFactors } from "./weather";
 import { CLASS_ASSUMPTIONS, type DayType, type TrafficSegment } from "./types";
 export type CongestionLevel = "free" | "moderate" | "heavy" | "severe";
 export const LEVELS: {
@@ -15,6 +17,7 @@ export type DirectionState = {
     capacity: number;
     ratio: number;
     speedKmh: number;
+    freeSpeedKmh: number;
     level: CongestionLevel;
 };
 export const MINUTES_PER_DAY = 1440;
@@ -31,6 +34,16 @@ export function levelFor(ratio: number): CongestionLevel {
             level = item.id;
     return level;
 }
+export function congestionPosition(ratio: number) {
+    if (!(ratio > 0)) return 0;
+    for (let index = 1; index < LEVELS.length; index++) {
+        const upper = LEVELS[index].minRatio;
+        if (ratio > upper) continue;
+        const lower = LEVELS[index - 1].minRatio;
+        return index - 1 + (ratio - lower) / (upper - lower);
+    }
+    return LEVELS.length - 1;
+}
 export function capacityPerDirection(segment: Pick<TrafficSegment, "cls" | "oneway">) {
     const assumption = CLASS_ASSUMPTIONS[segment.cls] ?? CLASS_ASSUMPTIONS.Local;
     return (segment.oneway === 0 ? assumption.lanes : assumption.onewayLanes) * assumption.laneCapacity;
@@ -38,17 +51,19 @@ export function capacityPerDirection(segment: Pick<TrafficSegment, "cls" | "onew
 export function congestedSpeed(freeSpeedKmh: number, ratio: number) {
     return Math.max(4, freeSpeedKmh / (1 + 0.15 * ratio ** 4));
 }
-export function directionState(segment: Pick<TrafficSegment, "cls" | "oneway" | "weekdayDaily" | "weekendDaily">, share: number, day: DayType = "weekday"): DirectionState {
+export function directionState(segment: Pick<TrafficSegment, "cls" | "oneway" | "weekdayDaily" | "weekendDaily">, share: number, day: DayType = "weekday", weather: WeatherRates = DRY_WEATHER): DirectionState {
     const daily = day === "weekday" ? segment.weekdayDaily : segment.weekendDaily;
     const hourly = daily * share * 4;
     const flow = segment.oneway === 0 ? hourly / 2 : hourly;
-    const capacity = capacityPerDirection(segment);
+    const factors = weatherFactors(segment.cls, weather);
+    const capacity = capacityPerDirection(segment) * factors.capacity;
     const ratio = flow / capacity;
     const assumption = CLASS_ASSUMPTIONS[segment.cls] ?? CLASS_ASSUMPTIONS.Local;
-    return { flow, capacity, ratio, speedKmh: congestedSpeed(assumption.freeSpeedKmh, ratio), level: levelFor(ratio) };
+    const freeSpeedKmh = assumption.freeSpeedKmh * factors.speed;
+    return { flow, capacity, ratio, freeSpeedKmh, speedKmh: congestedSpeed(freeSpeedKmh, ratio), level: levelFor(ratio) };
 }
-export function vehiclesOnRoad(segment: Pick<TrafficSegment, "cls" | "oneway" | "weekdayDaily" | "weekendDaily" | "lengthM">, share: number, day: DayType = "weekday") {
-    const state = directionState(segment, share, day);
+export function vehiclesOnRoad(segment: Pick<TrafficSegment, "cls" | "oneway" | "weekdayDaily" | "weekendDaily" | "lengthM">, share: number, day: DayType = "weekday", weather: WeatherRates = DRY_WEATHER) {
+    const state = directionState(segment, share, day, weather);
     const perDirection = (state.flow / state.speedKmh) * (segment.lengthM / 1000);
     return perDirection * (segment.oneway === 0 ? 2 : 1);
 }

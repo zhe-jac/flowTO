@@ -1,4 +1,4 @@
-import type { CongestionLevel } from "./model";
+import { LEVELS, type CongestionLevel } from "./model";
 
 type Rgb = [number, number, number];
 
@@ -28,3 +28,12 @@ export const VIVID_COLORS: Record<CongestionLevel, Rgb> = {
   heavy: [255, 112, 0],
   severe: [255, 36, 48],
 };
+
+export function congestionColor(position: number, vivid = false): Rgb {
+  const value = Number.isNaN(position) ? 0 : Math.max(0, Math.min(LEVELS.length - 1, position));
+  const low = Math.floor(value), high = Math.min(LEVELS.length - 1, low + 1);
+  const t = value - low;
+  const a = vivid ? VIVID_COLORS[LEVELS[low].id] : LEVEL_COLORS[LEVELS[low].id].road;
+  const b = vivid ? VIVID_COLORS[LEVELS[high].id] : LEVEL_COLORS[LEVELS[high].id].road;
+  return [Math.round(a[0] + (b[0] - a[0]) * t), Math.round(a[1] + (b[1] - a[1]) * t), Math.round(a[2] + (b[2] - a[2]) * t)];
+}

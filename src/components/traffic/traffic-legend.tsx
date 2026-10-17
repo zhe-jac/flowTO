@@ -15,12 +15,12 @@ export default function TrafficLegend({ meta }: {
       <button className="traffic-legend-toggle" type="button" aria-expanded={expanded} aria-controls="traffic-legend-details" onClick={() => setExpanded((value) => !value)}><span>Traffic flow <small>Estimated</small></span><span aria-hidden="true">{expanded ? "−" : "+"}</span></button>
       {expanded ? <div id="traffic-legend-details">
         <ul>{LEVELS.map((level) => <li key={level.id}><i style={{ background: LEVEL_COLORS[level.id].css }} aria-hidden="true"/>{level.label}</li>)}</ul>
-        <p>White streaks show travel direction. Colours and speeds describe typical traffic rather than current sensor readings.</p>
+        <p>White streaks show travel direction. Colours blend gradually as estimated congestion increases. Colours and speeds describe typical traffic rather than current sensor readings.</p>
         <button type="button" className="traffic-link" aria-expanded={method} onClick={() => setMethod((value) => !value)}>{method ? "Hide method" : "How this is estimated"}</button>
         {method ? <div className="traffic-method">
           <p>{counted.toLocaleString()} of {total.toLocaleString()} segments use midblock counts or estimates from nearby intersection counts; {meta.sourceCounts.street.toLocaleString()} borrow a count from the same street, and {meta.sourceCounts.class.toLocaleString()} use a road-class estimate.</p>
           {meta.countAdjustment ? <p>Counts span several decades, so each location's counts from different years are merged (newest weighted most) and older ones are scaled to {meta.countAdjustment.recentFromYear}+ levels, using {meta.countAdjustment.pairedLocations.toLocaleString()} locations the City counted both before and since.</p> : null}
-          <p>Daily patterns use {meta.profileDays.weekday} weekday and {meta.profileDays.weekend} weekend 24-hour count days. Capacity is assumed by road class, speeds use the BPR formula, and two-way volumes split evenly. These are approximate conditions.</p>
+          <p>Daily patterns use {meta.profileDays.weekday} weekday and {meta.profileDays.weekend} weekend 24-hour count days. Capacity is assumed by road class, speeds use the BPR formula, and two-way volumes split evenly. Rain and snow lower assumed speeds and capacity while trip demand stays unchanged. These are approximate conditions.</p>
           <p>Saved full closures hide their road's traffic for all playback times. Schedules remain recorded metadata. Lane reductions and events do not change traffic yet; diversions and queues are not calculated.</p>
           <ul className="traffic-sources">{meta.sources.map((source) => <li key={source.url}><a href={source.url} target="_blank" rel="noopener noreferrer">{source.name}</a></li>)}</ul>
           <p className="traffic-licence">{meta.licence}</p>

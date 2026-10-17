@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Map as MapboxMap } from "mapbox-gl";
 import type { Map as MapLibreMap } from "maplibre-gl";
 import type { Disruption } from "@/lib/disruptions";
+import { weatherRatesFromIntensity } from "@/lib/weather";
 import { initialTrafficClock } from "@/lib/traffic/clock";
 import { dateAtNoon } from "@/lib/traffic/simulation-date";
 import { simulatorLight, type SimulatorLight } from "@/lib/daylight";
@@ -21,6 +22,7 @@ export default function MapWorkspace({ map, renderer }: { map: MapboxMap | MapLi
   const [panel, setPanel] = useState<"toolbox" | "weather" | null>(null);
   const [presentTime, setPresentTime] = useState(() => initialTrafficClock(window.location.search).rate.id === "live");
   const conditions = useCurrentWeather(presentTime);
+  const trafficWeather = useMemo(() => conditions.mode === "current" && conditions.reading ? { rainMmPerHour: conditions.reading.rainMmPerHour, snowCmPerHour: conditions.reading.snowCmPerHour } : weatherRatesFromIntensity(conditions.weather), [conditions.mode, conditions.reading, conditions.weather]);
   const openToolbox = useCallback((open: boolean) => setPanel(open ? "toolbox" : null), []);
   const openWeather = useCallback((open: boolean) => setPanel(open ? "weather" : null), []);
   const [items, setItems] = useState<Disruption[]>([]);
@@ -59,7 +61,7 @@ export default function MapWorkspace({ map, renderer }: { map: MapboxMap | MapLi
       <WeatherPrecipitation map={map} weather={conditions.weather} night={theme === "night"} smooth={conditions.mode === "current"} />
       <DisruptionToolbox map={map} onItemsChange={setItems} onInteractionChange={setInteracting} open={panel === "toolbox"} onOpenChange={openToolbox} suspended={panel === "weather"} />
       <WeatherMenu open={panel === "weather"} onOpenChange={openWeather} weather={conditions.weather} onChange={conditions.manualWeather} mode={conditions.mode} reading={conditions.reading} status={conditions.status} presentTime={presentTime} onModeChange={conditions.chooseMode} onRefresh={conditions.refresh} />
-      <TrafficOverlay map={map} renderer={renderer} items={items} interacting={interacting} onLightChange={setLight} onPresentTimeChange={setPresentTime} buildingFade={buildingFade} />
+      <TrafficOverlay weather={trafficWeather} map={map} renderer={renderer} items={items} interacting={interacting} onLightChange={setLight} onPresentTimeChange={setPresentTime} buildingFade={buildingFade} />
     </>
   );
 }

@@ -1,15 +1,16 @@
 "use client";
 import { useEffect, useState } from "react";
+import type { WeatherRates } from "@/lib/weather";
 import type { Disruption } from "@/lib/disruptions";
 import type { DayType } from "@/lib/traffic/types";
 import type { ReroutingPlan } from "@/lib/traffic/rerouting";
 
-export function useRerouting(items: Disruption[], day: DayType, minutes: number) {
+export function useRerouting(items: Disruption[], day: DayType, minutes: number, weather: WeatherRates) {
   const [result, setResult] = useState<{ key: string; scenarioKey: string; plan: ReroutingPlan } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [retry, setRetry] = useState(0);
-  const key = JSON.stringify({ items, day, minutes: Math.floor(minutes / 60) * 60 });
-  const scenarioKey = JSON.stringify({ items, day });
+  const key = JSON.stringify({ items, day, weather, minutes: Math.floor(minutes / 60) * 60 });
+  const scenarioKey = JSON.stringify({ items, day, weather });
   useEffect(() => {
     setError(null);
     if (!items.length) return;
@@ -24,7 +25,5 @@ export function useRerouting(items: Disruption[], day: DayType, minutes: number)
     }, 700);
     return () => { clearTimeout(timer); controller.abort(); };
   }, [key, scenarioKey, retry, items.length]);
-  // Keep the last valid plan during a time-only refresh. A changed disruption,
-  // active set, or day type still discards it immediately.
   return { plan: items.length && result?.scenarioKey === scenarioKey ? result.plan : null, error, loading: items.length > 0 && result?.key !== key && !error, retry: () => setRetry(n => n + 1) };
 }

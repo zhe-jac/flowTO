@@ -1,7 +1,9 @@
 "use client";
+import type { WeatherRates } from "@/lib/weather";
+import { weatherFactors, WEATHER_TRAFFIC_SOURCE } from "@/lib/traffic/weather";
 import type { ClockState } from "@/lib/traffic/clock";
-import { LEVEL_COLORS } from "@/lib/traffic/colors";
-import { directionState, formatClock, LEVELS, MINUTES_PER_DAY, profileShare, travelDirection } from "@/lib/traffic/model";
+import { congestionColor } from "@/lib/traffic/colors";
+import { congestionPosition, directionState, formatClock, LEVELS, MINUTES_PER_DAY, profileShare, travelDirection } from "@/lib/traffic/model";
 import { CLASS_ASSUMPTIONS, type TrafficData, type TrafficSegment } from "@/lib/traffic/types";
 import GlassSurface from "../glass-surface";
 import { impactedState, type Impact } from "@/lib/traffic/rerouting";
@@ -41,22 +43,26 @@ function directions(segment: TrafficSegment) {
         return [backward];
     return [forward, backward];
 }
-export default function RoadPanel({ segment, data, clock, closed, impact, onClose }: {
+export default function RoadPanel({ segment, data, clock, closed, impact, weather, onClose }: {
     segment: TrafficSegment;
     data: TrafficData;
     clock: ClockState;
     closed: boolean;
     impact?: Impact;
+    weather: WeatherRates;
     onClose: () => void;
 }) {
     const profile = data.profiles[clock.day];
     const share = profileShare(profile, clock.minutes);
-    const state = impactedState(segment, share, clock.day, impact);
+    const state = impactedState(segment, share, clock.day, impact, weather);
+    const factors = weatherFactors(segment.cls, weather);
+    const weatherActive = factors.speed < 1 || factors.capacity < 1;
     const level = LEVELS.find((item) => item.id === state.level)!;
+    const color = `rgb(${congestionColor(congestionPosition(state.ratio)).join(",")})`;
     const assumption = CLASS_ASSUMPTIONS[segment.cls];
     const daily = clock.day === "weekday" ? segment.weekdayDaily : segment.weekendDaily;
     const labels = directions(segment);
-    const ratios = profile.map((value) => directionState(segment, value, clock.day).ratio);
+    const ratios = profile.map((value) => directionState(segment, value, clock.day, weather).ratio);
     const maxRatio = Math.max(1.1, ...ratios);
     const y = (ratio: number) => CHART_H - (ratio / maxRatio) * (CHART_H - 4);
     const line = ratios.map((ratio, index) => `${((index + 0.5) / ratios.length) * CHART_W},${y(ratio)}`).join(" L");
@@ -71,8 +77,8 @@ export default function RoadPanel({ segment, data, clock, closed, impact, onClos
       </header>
       {closed ? <p className="road-panel-note">Closed in this scenario. Traffic is diverted to connected roads where a detour is available.</p> : null}
 
-      <p className="road-panel-level" style={{ borderColor: LEVEL_COLORS[state.level].css }}>
-        <i style={{ background: LEVEL_COLORS[state.level].css }} aria-hidden="true"/>
+      <p className="road-panel-level" style={{ borderColor: color }}>
+        <i style={{ background: color }} aria-hidden="true"/>
         <strong>{closed ? "Closed" : level.label}</strong>
         <span>at {formatClock(clock.minutes)}, {impact ? "scenario" : "typical"} {clock.day}</span>
       </p>
@@ -83,11 +89,11 @@ export default function RoadPanel({ segment, data, clock, closed, impact, onClos
         <div><dt>Estimated speed</dt><dd>{Math.round(state.speedKmh)}<small> km/h</small></dd></div>
         <div><dt>Baseline vehicles / day</dt><dd>{daily.toLocaleString()}<small> total</small></dd></div>
       </dl>
-      {impact ? <p className="road-panel-note">Scenario estimate includes diverted traffic and reduced capacity. The daily chart shows the baseline.</p> : null}
+      {impact ? <p className="road-panel-note">Scenario estimate includes diverted traffic and reduced capacity. The daily chart excludes disruptions and uses the same weather.</p> : null}
       {labels.length > 1 ? <p className="road-panel-note">{labels.join(" and ")} traffic are assumed to split evenly.</p> : null}
 
       <figure className="road-panel-chart">
-        <figcaption>Capacity used through a typical {clock.day}</figcaption>
+        <figcaption>Capacity used through a typical {clock.day}{weatherActive ? " · selected weather" : ""}</figcaption>
         <svg viewBox={`0 0 ${CHART_W} ${CHART_H}`} role="img" aria-label={`Peaks at ${Math.round(Math.max(...ratios) * 100)}% of capacity`}>
           <line className="road-panel-capacity" x1="0" x2={CHART_W} y1={y(1)} y2={y(1)}/>
           <path className="road-panel-area" d={`M0,${CHART_H} L${line} L${CHART_W},${CHART_H} Z`}/>
@@ -99,7 +105,8 @@ export default function RoadPanel({ segment, data, clock, closed, impact, onClos
 
       <p className="road-panel-source">{sourceText(segment)}</p>
       <p className="road-panel-source">
-        Assumes {Math.round(state.capacity).toLocaleString()} vehicles/hour capacity per direction and {assumption?.freeSpeedKmh} km/h when uncongested.
+        Assumes {Math.round(state.capacity).toLocaleString()} vehicles/hour capacity per direction and {Math.round(state.freeSpeedKmh)} km/h when uncongested.
       </p>
+      {weatherActive ? <p className="road-panel-source">Weather lowers assumed uncongested speed by {Math.round((1 - factors.speed) * 100)}% and capacity by {Math.round((1 - factors.capacity) * 100)}%. Demand stays unchanged. <a href={WEATHER_TRAFFIC_SOURCE} target="_blank" rel="noreferrer">Research-informed estimate</a>; not calibrated to Toronto weather.</p> : null}
     </aside></GlassSurface></div>);
 }
