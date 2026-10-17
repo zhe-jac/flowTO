@@ -14,6 +14,22 @@ export const MAP_PALETTE = {
   industrial: "#dce9f0",
 };
 
+export const MAP_NIGHT_PALETTE: Record<keyof typeof MAP_PALETTE, string> = {
+  land: "#152536",
+  water: "#0d2335",
+  greenspace: "#19382f",
+  buildings: "#294359",
+  roads: "#344d61",
+  trunks: "#3b556a",
+  motorways: "#48647a",
+  roadLabels: "#c0d6e6",
+  placeLabels: "#a9c5d9",
+  commercial: "#1b3043",
+  medical: "#20384b",
+  education: "#203c3e",
+  industrial: "#233445",
+};
+
 export const MAPBOX_BASEMAP_CONFIG = {
   theme: "default",
   lightPreset: "day",
@@ -44,3 +60,12 @@ export const MAPBOX_BASEMAP_CONFIG = {
   colorEducation: MAP_PALETTE.education,
   colorIndustrial: MAP_PALETTE.industrial,
 };
+
+export function mapboxBasemapConfig(theme: "day" | "night") {
+  const palette = theme === "night" ? MAP_NIGHT_PALETTE : MAP_PALETTE;
+  return {
+    ...MAPBOX_BASEMAP_CONFIG,
+    lightPreset: theme,
+    ...Object.fromEntries(Object.entries(palette).map(([name, value]) => [`color${name[0].toUpperCase()}${name.slice(1)}`, value])),
+  };
+}

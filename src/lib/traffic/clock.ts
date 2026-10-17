@@ -40,3 +40,17 @@ export function advanceClock(state: ClockState, seconds: number, now = new Date(
     const minutes = (state.minutes + seconds * state.rate.minutesPerSecond) % MINUTES_PER_DAY;
     return { ...state, minutes };
 }
+
+export function initialTrafficClock(search: string, now = new Date()): ClockState {
+    const clock: ClockState = { ...torontoNow(now), playing: true, rate: CLOCK_RATES[0] };
+    const params = new URLSearchParams(search);
+    const time = params.get("time")?.match(/^(\d{1,2}):(\d{2})$/);
+    const validTime = !!time && Number(time[1]) < 24 && Number(time[2]) < 60;
+    if (validTime) clock.minutes = Number(time[1]) * 60 + Number(time[2]);
+    const day = params.get("day");
+    if (day === "weekday" || day === "weekend") clock.day = day;
+    const rate = CLOCK_RATES.find((item) => item.id === params.get("speed"));
+    if (rate) clock.rate = rate;
+    if (clock.rate.id === "live" && (validTime || day === "weekday" || day === "weekend")) clock.rate = CLOCK_RATES[1];
+    return clock;
+}

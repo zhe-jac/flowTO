@@ -12,7 +12,8 @@ const LAYER_ID = "disruption-3d-scenes";
 export function installDisruptionModels(map: DisruptionMap, onReady: (ready: boolean) => void) {
   const camera = new Camera();
   const scene = new Scene();
-  scene.add(new AmbientLight("#e7f3ff", 2.1));
+  const ambient = new AmbientLight("#e7f3ff", 2.1);
+  scene.add(ambient);
   const sun = new DirectionalLight("#ffffff", 2.5);
   sun.position.set(-80, -100, 180);
   scene.add(sun);
@@ -24,6 +25,14 @@ export function installDisruptionModels(map: DisruptionMap, onReady: (ready: boo
   let disposed = false;
   let failed = false;
   const repaint = () => { if (!disposed && !document.hidden) map.triggerRepaint(); };
+  const updateLighting = () => {
+    const night = document.documentElement.dataset.simTheme === "night";
+    ambient.intensity = night ? 1.2 : 2.1;
+    sun.intensity = night ? 0.9 : 2.5;
+    repaint();
+  };
+  document.addEventListener("simulator-theme-change", updateLighting);
+  updateLighting();
   preference.addEventListener("change", repaint);
   document.addEventListener("visibilitychange", repaint);
 
@@ -32,6 +41,7 @@ export function installDisruptionModels(map: DisruptionMap, onReady: (ready: boo
     disposed = true;
     preference.removeEventListener("change", repaint);
     document.removeEventListener("visibilitychange", repaint);
+    document.removeEventListener("simulator-theme-change", updateLighting);
     for (const entry of entries.values()) entry.model.dispose();
     entries.clear();
     scene.clear();

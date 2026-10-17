@@ -3,6 +3,7 @@ import buffer from "@turf/buffer";
 import sharp from "sharp";
 import type { Feature, MultiPolygon, Position } from "geojson";
 import { createOutsideMask } from "../src/lib/city-boundary";
+import { TORONTO_NIGHT_MASK_COLOR } from "../src/lib/city-boundary-presentation";
 
 const boundary = JSON.parse(await readFile("src/lib/data/toronto-boundary.json", "utf8")) as Feature<MultiPolygon>;
 const buffered = buffer(boundary, 0.9, { units: "kilometers", steps: 12 });
@@ -42,5 +43,13 @@ for (let index = 0; index < pixels.length; index++) {
 const coordinates = [[west, north], [east, north], [east, south], [west, south]].map(unproject);
 const outside = createOutsideMask({ type: "Polygon", coordinates: [[...coordinates.slice().reverse(), coordinates[3]]] });
 await sharp(rgba, { raw: { width, height, channels: 4 } }).png().toFile("public/data/toronto-boundary-fade.png");
+const night = Buffer.from(rgba);
+const nightColor = TORONTO_NIGHT_MASK_COLOR.slice(1).match(/../g)!.map((channel) => parseInt(channel, 16));
+for (let index = 0; index < pixels.length; index++) {
+  night[index * 4] = nightColor[0];
+  night[index * 4 + 1] = nightColor[1];
+  night[index * 4 + 2] = nightColor[2];
+}
+await sharp(night, { raw: { width, height, channels: 4 } }).png().toFile("public/data/toronto-boundary-fade-night.png");
 await writeFile("src/lib/data/toronto-boundary-fade.json", JSON.stringify({ coordinates, outside }));
 console.log(JSON.stringify({ fade: "public/data/toronto-boundary-fade.png", width, height }));

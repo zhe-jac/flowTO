@@ -1623,3 +1623,159 @@ button {
     display: none;
   }
 }
+
+:root[data-sim-theme="night"] {
+  color-scheme: dark;
+  --ui-ink: #e1edf6;
+  --ui-muted: #aac2d5;
+  --ui-accent: #a0d3f4;
+  --glass-tint: rgb(19 39 57 / 94%);
+  --glass-panel-tint: rgb(20 40 59 / 96%);
+  --glass-border: rgb(154 192 219 / 23%);
+  --glass-shadow: 0 8px 28px rgb(0 9 19 / 28%), 0 2px 5px rgb(0 9 19 / 20%), inset 0 1px 0 rgb(196 224 244 / 14%), inset 0 -1px 0 rgb(4 19 32 / 40%);
+  --glass-inner: inset 0 1px 0 rgb(185 217 239 / 12%), inset 0 -1px 0 rgb(2 14 25 / 28%);
+}
+
+:root[data-sim-theme="night"] body {
+  background: #101d2b;
+}
+
+:root[data-sim-theme="night"] [data-kind="closure"] {
+  --disruption-ink: #ffb2a7;
+}
+
+:root[data-sim-theme="night"] [data-kind="event"] {
+  --disruption-ink: #d2b9ff;
+}
+
+:root[data-sim-theme="night"] [data-kind="accident"] {
+  --disruption-ink: #ffafc0;
+}
+
+:root[data-sim-theme="night"] [data-kind="construction"] {
+  --disruption-ink: #f6ce97;
+}
+
+:root[data-sim-theme="night"] :is(.map-view-toggle button[aria-pressed="true"], .toolbox-toggle[aria-expanded="true"], .traffic-segmented button[aria-pressed="true"]) {
+  border-color: rgb(154 199 230 / 30%);
+  background: rgb(89 145 185 / 30%);
+  color: var(--ui-ink);
+}
+
+:root[data-sim-theme="night"] :is(.map-error button, .toolbox-close, .road-panel-close, .map-provider-dismiss, .closure-placement-help button, .closure-preview-actions button) {
+  border-color: var(--glass-border);
+  background: rgb(106 159 196 / 14%);
+  color: var(--ui-ink);
+}
+
+:root[data-sim-theme="night"] .closure-drag-tool {
+  border-color: var(--glass-border);
+  background: linear-gradient(125deg, rgb(var(--disruption-rgb) / 23%), rgb(32 58 79 / 35%));
+}
+
+:root[data-sim-theme="night"] .closure-drag-tool:is(:hover, [aria-pressed="true"]) {
+  border-color: rgb(var(--disruption-rgb) / 65%);
+  background: linear-gradient(125deg, rgb(var(--disruption-rgb) / 35%), rgb(48 78 100 / 40%));
+}
+
+:root[data-sim-theme="night"] .closure-tool-icon {
+  border-color: rgb(var(--disruption-rgb, 199 80 68) / 35%);
+  background: linear-gradient(135deg, rgb(55 82 104 / 55%), rgb(var(--disruption-rgb, 199 80 68) / 25%));
+}
+
+:root[data-sim-theme="night"] :is(.disruption-field input, .disruption-field select) {
+  border-color: var(--glass-border);
+  background: rgb(11 29 44 / 65%);
+  color: var(--ui-ink);
+}
+
+:root[data-sim-theme="night"] :is(.disruption-field input::placeholder, .disruption-field select::placeholder) {
+  color: var(--ui-muted);
+}
+
+:root[data-sim-theme="night"] .disruption-field option {
+  background: #152b3e;
+  color: var(--ui-ink);
+}
+
+:root[data-sim-theme="night"] .disruption-editor .closure-apply {
+  background: var(--disruption-color);
+  color: #f5faff;
+}
+
+:root[data-sim-theme="night"] :is(.closure-preview-actions .closure-remove, .disruption-editor .disruption-form-error, .toolbox-load-error) {
+  color: #ffb2a7;
+}
+
+:root[data-sim-theme="night"] .disruption-markers[data-models="true"] .disruption-marker {
+  border-color: var(--glass-border);
+  background: rgb(20 40 59 / 92%);
+  color: var(--disruption-ink);
+}
+
+:root[data-sim-theme="night"] :is(.closure-list button, .toolbox-coverage) {
+  border-color: var(--glass-border);
+}
+
+:root[data-sim-theme="night"] :is(.closure-list > button:hover, .toolbox-close:hover, .road-panel-close:hover) {
+  background: rgb(112 165 202 / 20%);
+}
+
+:root[data-sim-theme="night"] :is(.toolbox-coverage button, .toolbox-load-error button, .map-provider-notice a) {
+  color: var(--ui-accent);
+}
+
+:root[data-sim-theme="night"] .traffic-play {
+  border-color: var(--glass-border);
+  background: rgb(79 139 180 / 30%);
+}
+
+:root[data-sim-theme="night"] .traffic-segmented {
+  background: rgb(7 23 36 / 35%);
+}
+
+:root[data-sim-theme="night"] .traffic-profile path {
+  fill: rgb(106 174 218 / 32%);
+}
+
+:root[data-sim-theme="night"] .traffic-timeline input[type="range"]::-webkit-slider-thumb {
+  border-color: #294960;
+  background: #b4dcf6;
+}
+
+:root[data-sim-theme="night"] .traffic-timeline input[type="range"]::-moz-range-thumb {
+  border-color: #294960;
+  background: #b4dcf6;
+}
+
+:root[data-sim-theme="night"] .road-panel-now {
+  stroke: #c0dff3;
+}
+
+:root[data-sim-theme="night"] .road-panel-line {
+  stroke: #8bc3e7;
+}
+
+:root[data-sim-theme="night"] .road-panel-area {
+  fill: rgb(127 186 225 / 18%);
+}
+
+:root[data-sim-theme="night"] .map-zoom-controls button:hover:not(:disabled),
+:root[data-sim-theme="night"] .map-view-toggle button:hover:not(:disabled) {
+  background: rgb(112 165 202 / 20%);
+}
+
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root[data-sim-theme="night"] {
+    --glass-tint: rgb(17 36 54 / 66%);
+    --glass-panel-tint: rgb(20 40 59 / 80%);
+  }
+}
+
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  :root[data-sim-theme="night"] {
+    --glass-tint: #142b3e;
+    --glass-panel-tint: #183247;
+    --glass-border: #64849c;
+  }
+}

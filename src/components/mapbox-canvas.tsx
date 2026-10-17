@@ -2,9 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { Map as MapboxMap } from "mapbox-gl";
-import { MAPBOX_BASEMAP_CONFIG } from "@/lib/map-theme";
+import { mapboxBasemapConfig } from "@/lib/map-theme";
+import { initialTrafficClock } from "@/lib/traffic/clock";
+import { simulatorTheme } from "@/lib/simulator-theme";
 import { BOUNDARY_ATTRIBUTION, restrictCameraToToronto, TORONTO_BOUNDS, TORONTO_MIN_ZOOM } from "@/lib/city-boundary";
-import { TORONTO_DISTANT_MASK, TORONTO_FADE_COORDINATES, TORONTO_FADE_IMAGE, TORONTO_MASK_COLOR } from "@/lib/city-boundary-presentation";
+import { TORONTO_DISTANT_MASK, TORONTO_FADE_COORDINATES, TORONTO_FADE_IMAGE, TORONTO_MASK_COLOR, TORONTO_NIGHT_FADE_IMAGE, TORONTO_NIGHT_MASK_COLOR } from "@/lib/city-boundary-presentation";
 import MapWorkspace from "./map-workspace";
 import MapControls from "./map-controls";
 
@@ -26,6 +28,7 @@ export default function MapboxCanvas({ accessToken }: { accessToken: string }) {
       try {
         const { default: mapboxgl } = await import("mapbox-gl");
         if (disposed || !containerRef.current) return;
+        const theme = simulatorTheme(initialTrafficClock(window.location.search).minutes);
 
         map = new mapboxgl.Map({
           container: containerRef.current,
@@ -42,7 +45,7 @@ export default function MapboxCanvas({ accessToken }: { accessToken: string }) {
           antialias: true,
           attributionControl: false,
           config: {
-            basemap: MAPBOX_BASEMAP_CONFIG,
+            basemap: mapboxBasemapConfig(theme),
           },
         });
 
@@ -52,7 +55,7 @@ export default function MapboxCanvas({ accessToken }: { accessToken: string }) {
         map.on("load", () => {
           if (disposed || !map) return;
           map.addSource("outside-toronto", { type: "geojson", data: TORONTO_DISTANT_MASK, attribution: BOUNDARY_ATTRIBUTION, tolerance: 0 });
-          map.addSource("toronto-boundary-fade", { type: "image", url: TORONTO_FADE_IMAGE, coordinates: TORONTO_FADE_COORDINATES });
+          map.addSource("toronto-boundary-fade", { type: "image", url: theme === "night" ? TORONTO_NIGHT_FADE_IMAGE : TORONTO_FADE_IMAGE, coordinates: TORONTO_FADE_COORDINATES });
           map.addLayer({
             id: "outside-toronto-clip",
             type: "clip",
@@ -63,7 +66,7 @@ export default function MapboxCanvas({ accessToken }: { accessToken: string }) {
             id: "outside-toronto-mask",
             type: "fill",
             source: "outside-toronto",
-            paint: { "fill-color": TORONTO_MASK_COLOR, "fill-opacity": 1, "fill-emissive-strength": 1, "fill-antialias": false },
+            paint: { "fill-color": theme === "night" ? TORONTO_NIGHT_MASK_COLOR : TORONTO_MASK_COLOR, "fill-opacity": 1, "fill-emissive-strength": 1, "fill-antialias": false },
           });
           map.addLayer({
             id: "toronto-boundary-fade",

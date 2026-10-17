@@ -7,7 +7,9 @@ import type { Map as MapboxMap } from "mapbox-gl";
 import type { Map as MapLibreMap } from "maplibre-gl";
 import type { Disruption } from "@/lib/disruptions";
 import type { DisruptionMap } from "@/lib/disruption-map";
-import { advanceClock, CLOCK_RATES, torontoNow, type ClockState } from "@/lib/traffic/clock";
+import { advanceClock, initialTrafficClock, type ClockState } from "@/lib/traffic/clock";
+import { simulatorTheme } from "@/lib/simulator-theme";
+import type { SimulatorTheme } from "@/lib/simulator-theme";
 import { CLASS_WIDTHS, LEVEL_COLORS } from "@/lib/traffic/colors";
 import { closedRoadIds } from "@/lib/traffic/disruptions";
 import { continuousPulseOffset, PULSE_SPACING } from "@/lib/traffic/flow-motion";
@@ -42,6 +44,7 @@ type Props = {
     renderer: "mapbox" | "maplibre";
     items: Disruption[];
     interacting: boolean;
+    onThemeChange: (theme: SimulatorTheme) => void;
 };
 function buildFlows(segments: TrafficSegment[]) {
     const flows: Flow[] = [];
@@ -56,28 +59,14 @@ function buildFlows(segments: TrafficSegment[]) {
     });
     return flows;
 }
-function initialClock(): ClockState {
-    const clock: ClockState = { ...torontoNow(), playing: true, rate: CLOCK_RATES[0] };
-    const params = new URLSearchParams(window.location.search);
-    const time = params.get("time")?.match(/^(\d{1,2}):(\d{2})$/);
-    if (time && Number(time[1]) < 24 && Number(time[2]) < 60)
-        clock.minutes = Number(time[1]) * 60 + Number(time[2]);
-    const day = params.get("day");
-    if (day === "weekday" || day === "weekend")
-        clock.day = day;
-    const rate = CLOCK_RATES.find((item) => item.id === params.get("speed"));
-    if (rate)
-        clock.rate = rate;
-    if (clock.rate.id === "live" && (time || day))
-        clock.rate = CLOCK_RATES[1];
-    return clock;
-}
-export default function TrafficOverlay({ map, renderer, items, interacting }: Props) {
+export default function TrafficOverlay({ map, renderer, items, interacting, onThemeChange }: Props) {
     const [data, setData] = useState<TrafficData | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [retry, setRetry] = useState(0);
     const [selected, setSelected] = useState<number | null>(null);
-    const [snapshot, setSnapshot] = useState<Snapshot>(() => ({ clock: initialClock(), vehicles: 0 }));
+    const [snapshot, setSnapshot] = useState<Snapshot>(() => ({ clock: initialTrafficClock(window.location.search), vehicles: 0 }));
+    const theme = simulatorTheme(snapshot.clock.minutes);
+    useEffect(() => { onThemeChange(theme); }, [theme, onThemeChange]);
     const clockRef = useRef(snapshot.clock);
     const selectedRef = useRef<number | null>(null);
     const redrawRef = useRef<() => void>(() => { });
