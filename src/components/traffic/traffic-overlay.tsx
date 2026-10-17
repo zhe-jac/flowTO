@@ -24,8 +24,11 @@ import { formatClock, LEVELS } from "@/lib/traffic/model";
 import { tweenValue, retargetTween, junctionBlend, COLOUR_TRANSITION_MS, HIGHLIGHT_TRANSITION_MS, type VisualTween } from "@/lib/traffic/visual-transition";
 import { comparisonImpacts } from "@/lib/traffic/comparison";
 import { useRerouting } from "./use-rerouting";
+import { buildingFadeStrength } from "@/lib/building-fade";
+import type { BuildingFadeController } from "@/lib/building-fade-layer";
 const FLAT_DEPTH = { depthCompare: "always", depthWriteEnabled: false } as const;
 const TILTED_DEPTH = { depthCompare: "less-equal", depthWriteEnabled: false } as const;
+const OCCLUDED_DEPTH = { depthCompare: "greater", depthWriteEnabled: false } as const;
 const OFFSET_EXTENSION = new PathStyleExtension({ offset: true });
 
 /** Short pieces preserve the highlighted road geometry. */
@@ -59,6 +62,7 @@ type Props = {
     items: Disruption[];
     interacting: boolean;
     onLightChange: (light: SimulatorLight) => void;
+    buildingFade: BuildingFadeController | null;
 };
 function buildFlows(segments: TrafficSegment[]) {
     const flows: Flow[] = [];
@@ -73,7 +77,7 @@ function buildFlows(segments: TrafficSegment[]) {
     });
     return flows;
 }
-export default function TrafficOverlay({ map, renderer, items, interacting, onLightChange }: Props) {
+export default function TrafficOverlay({ map, renderer, items, interacting, onLightChange, buildingFade }: Props) {
     const [data, setData] = useState<TrafficData | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [retry, setRetry] = useState(0);
@@ -184,6 +188,10 @@ export default function TrafficOverlay({ map, renderer, items, interacting, onLi
         let pieces: Piece[] = [];
         let boldPieces: Piece[] = [];
         let plainPieces: Piece[] = [];
+        let visibleBoldPieces: Piece[] = [];
+        let visiblePlainPieces: Piece[] = [];
+        let impactViewport: number[] | null = null;
+        let impactMembership = "";
         let membershipKey = "";
         const displayLevel = new Map<number, number>();
         let highlighted = new Set<number>();
@@ -348,6 +356,7 @@ export default function TrafficOverlay({ map, renderer, items, interacting, onLi
                 return;
             const overlay = new Overlay({ interleaved: true, pickingRadius: 8, onClick: roadPick, getCursor: ({ isHovering, isDragging }) => latestRef.current.interacting ? "crosshair" : isDragging ? "grabbing" : isHovering ? "pointer" : "grab", layers: [], onError: () => setError("Traffic rendering is unavailable. The map and disruption tools are still available.") });
             const placement = renderer === "mapbox" ? { slot: "middle" as const } : { beforeId: "outside-toronto-mask" };
+            const fadePlacement = renderer === "mapbox" ? { slot: "top" as const, beforeId: "toronto-road-labels" } : { beforeId: map.getStyle()?.layers?.find(layer => layer.type === "symbol")?.id };
             detach = () => { try {
                 map.removeControl(overlay as never);
             }
@@ -374,6 +383,7 @@ export default function TrafficOverlay({ map, renderer, items, interacting, onLi
                     const next = viewport.select([bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()]);
                     if (next !== visibleSegments || visibleClosures !== effectiveKey) {
                         visibleSegments = next;
+                        buildingFade?.setRoads(next.map(index => segments[index]));
                         visibleClosures = effectiveKey;
                         mainFlows = [];
                         collectorFlows = [];
@@ -443,8 +453,20 @@ export default function TrafficOverlay({ map, renderer, items, interacting, onLi
                     pickable: false, extensions: [OFFSET_EXTENSION],
                     updateTriggers: { getColor: visualVersion, getFlowParams: paramVersion, getWidth: visualVersion, getOffset: visualVersion },
                 });
-                if (plainPieces.length) layers.push(impactLayer("traffic-flow-impact", plainPieces, false));
-                if (boldPieces.length) layers.push(impactLayer("traffic-flow-highlight", boldPieces, true));
+                if (impactViewport !== visibleSegments || impactMembership !== membershipKey) {
+                    impactViewport = visibleSegments;
+                    impactMembership = membershipKey;
+                    const visible = new Set(visibleSegments ?? []);
+                    visiblePlainPieces = plainPieces.filter(piece => visible.has(piece.flow.segment));
+                    visibleBoldPieces = boldPieces.filter(piece => visible.has(piece.flow.segment));
+                }
+                if (visiblePlainPieces.length) layers.push(impactLayer("traffic-flow-impact", visiblePlainPieces, false));
+                if (visibleBoldPieces.length) layers.push(impactLayer("traffic-flow-highlight", visibleBoldPieces, true));
+                const fadeOpacity = buildingFade ? buildingFadeStrength(map.getPitch()) : 0;
+                if (fadeOpacity > 0) {
+                    const throughBuildings = layers.map(layer => layer.clone({ id: `${layer.id}-through-buildings`, ...fadePlacement, parameters: OCCLUDED_DEPTH, opacity: (layer.props.opacity ?? 1) * fadeOpacity }));
+                    layers.push(...throughBuildings);
+                }
                 overlay.setProps({ layers });
                 if (now - lastUi >= 250) {
                     lastUi = now;
@@ -481,8 +503,8 @@ export default function TrafficOverlay({ map, renderer, items, interacting, onLi
         }
         void initialize().catch(() => { if (!disposed)
             setError("Traffic rendering is unavailable. The map and disruption tools are still available."); });
-        return () => { disposed = true; cancelAnimationFrame(frame); clearTimeout(timer); redrawRef.current = () => { }; detach(); };
-    }, [data, map, renderer, retry]);
+        return () => { disposed = true; cancelAnimationFrame(frame); clearTimeout(timer); redrawRef.current = () => { }; detach(); buildingFade?.setRoads([]); };
+    }, [data, map, renderer, retry, buildingFade]);
     const updateClock = (change: Partial<ClockState>) => {
         clockRef.current = { ...clockRef.current, ...change };
         setSnapshot((previous) => ({ ...previous, clock: clockRef.current }));

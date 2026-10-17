@@ -7,6 +7,7 @@ import type { DisruptionMap } from "@/lib/disruption-map";
 import type { Road } from "@/lib/types";
 import { nearestRoad } from "@/lib/closure-placement";
 import { applyRoadSections, extentAnchors, pointOnRoad, roadSections, traceRoadExtent } from "@/lib/road-extent";
+import { setBuildingFadeFocus } from "@/lib/building-fade";
 
 type CursorPoint = { x: number; y: number };
 type Props = { map: DisruptionMap; draft: RoadDisruption; roads: ReadonlyMap<string, Road>; onChange: (item: RoadDisruption) => void };
@@ -33,6 +34,7 @@ export default function DisruptionEndpoints(props: Props) {
     const rect = map.getCanvas().getBoundingClientRect();
     const point = { x: client.x - rect.left, y: client.y - rect.top };
     const over = document.elementFromPoint(client.x, client.y)?.closest("[data-map-ui], .mapboxgl-ctrl, .maplibregl-ctrl");
+    setBuildingFadeFocus(map.getCanvas(), (!over || over.classList.contains("disruption-endpoint")) && point.x >= 0 && point.y >= 0 && point.x <= rect.width && point.y <= rect.height ? point : null);
     if (over && !over.classList.contains("disruption-endpoint")) return false;
     if (point.x < 0 || point.y < 0 || point.x > rect.width || point.y > rect.height || map.getZoom() < 12) return false;
     const path = roadSections(draft);
@@ -93,6 +95,7 @@ export default function DisruptionEndpoints(props: Props) {
     const restore = (revert: boolean) => {
       cancelAnimationFrame(frame.current);
       frame.current = 0;
+      setBuildingFadeFocus(map.getCanvas(), null);
       const active = drag.current;
       drag.current = null;
       if (active && revert) {
@@ -139,6 +142,7 @@ export default function DisruptionEndpoints(props: Props) {
       frame.current = 0;
       drag.current = null;
       window.removeEventListener("pointermove", move);
+      setBuildingFadeFocus(map.getCanvas(), null);
       window.removeEventListener("pointerup", finish);
       window.removeEventListener("pointercancel", interrupted);
       window.removeEventListener("blur", cancel);
