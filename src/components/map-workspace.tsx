@@ -11,6 +11,8 @@ import { dateAtNoon } from "@/lib/traffic/simulation-date";
 import { simulatorLight, type SimulatorLight } from "@/lib/daylight";
 import { createMapLighting } from "@/lib/map-lighting";
 import DisruptionToolbox from "./disruption-toolbox";
+import TrafficChat from "./traffic-chat";
+import type { ChatTrafficContext } from "@/lib/traffic/chat";
 import WeatherMenu from "./weather-menu";
 import WeatherPrecipitation from "./weather-precipitation";
 import { useCurrentWeather } from "./use-current-weather";
@@ -19,7 +21,9 @@ import { installBuildingFade, type BuildingFadeController } from "@/lib/building
 const TrafficOverlay = dynamic(() => import("./traffic/traffic-overlay"), { ssr: false });
 
 export default function MapWorkspace({ map, renderer }: { map: MapboxMap | MapLibreMap; renderer: "mapbox" | "maplibre" }) {
-  const [panel, setPanel] = useState<"toolbox" | "weather" | null>(null);
+  const [panel, setPanel] = useState<"toolbox" | "weather" | "chat" | null>(null);
+  const [chatContext, setChatContext] = useState<ChatTrafficContext | null>(null);
+  const openChat = useCallback((open: boolean) => setPanel(open ? "chat" : null), []);
   const [presentTime, setPresentTime] = useState(() => initialTrafficClock(window.location.search).rate.id === "live");
   const conditions = useCurrentWeather(presentTime);
   const trafficWeather = useMemo(() => conditions.mode === "current" && conditions.reading ? { rainMmPerHour: conditions.reading.rainMmPerHour, snowCmPerHour: conditions.reading.snowCmPerHour } : weatherRatesFromIntensity(conditions.weather), [conditions.mode, conditions.reading, conditions.weather]);
@@ -59,9 +63,10 @@ export default function MapWorkspace({ map, renderer }: { map: MapboxMap | MapLi
   return (
     <>
       <WeatherPrecipitation map={map} weather={conditions.weather} night={theme === "night"} smooth={conditions.mode === "current"} />
-      <DisruptionToolbox map={map} onItemsChange={setItems} onInteractionChange={setInteracting} open={panel === "toolbox"} onOpenChange={openToolbox} suspended={panel === "weather"} />
+      <DisruptionToolbox map={map} items={items} setItems={setItems} onInteractionChange={setInteracting} open={panel === "toolbox"} onOpenChange={openToolbox} suspended={panel === "weather" || panel === "chat"} />
       <WeatherMenu open={panel === "weather"} onOpenChange={openWeather} weather={conditions.weather} onChange={conditions.manualWeather} mode={conditions.mode} reading={conditions.reading} status={conditions.status} presentTime={presentTime} onModeChange={conditions.chooseMode} onRefresh={conditions.refresh} />
-      <TrafficOverlay weather={trafficWeather} map={map} renderer={renderer} items={items} interacting={interacting} onLightChange={setLight} onPresentTimeChange={setPresentTime} buildingFade={buildingFade} />
+      <TrafficChat open={panel === "chat"} onOpenChange={openChat} context={chatContext} items={items} weather={trafficWeather} onApply={proposals => { if (items.length + proposals.length > 20) return false; setItems(current => [...current, ...proposals]); return true; }} />
+      <TrafficOverlay weather={trafficWeather} map={map} renderer={renderer} items={items} interacting={interacting} onLightChange={setLight} onPresentTimeChange={setPresentTime} buildingFade={buildingFade} onChatContext={setChatContext} />
     </>
   );
 }

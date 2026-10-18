@@ -7,6 +7,7 @@ import { congestionPosition, directionState, formatClock, LEVELS, MINUTES_PER_DA
 import { CLASS_ASSUMPTIONS, type TrafficData, type TrafficSegment } from "@/lib/traffic/types";
 import GlassSurface from "../glass-surface";
 import { impactedState, type Impact } from "@/lib/traffic/rerouting";
+import type { ActivityContext } from "@/lib/traffic/activity";
 const CHART_W = 260;
 const CHART_H = 64;
 function sourceText(segment: TrafficSegment) {
@@ -43,18 +44,19 @@ function directions(segment: TrafficSegment) {
         return [backward];
     return [forward, backward];
 }
-export default function RoadPanel({ segment, data, clock, closed, impact, weather, onClose }: {
+export default function RoadPanel({ segment, data, clock, closed, impact, weather, activity, onClose }: {
     segment: TrafficSegment;
     data: TrafficData;
     clock: ClockState;
     closed: boolean;
     impact?: Impact;
     weather: WeatherRates;
+    activity?: ActivityContext;
     onClose: () => void;
 }) {
     const profile = data.profiles[clock.day];
     const share = profileShare(profile, clock.minutes);
-    const state = impactedState(segment, share, clock.day, impact, weather);
+    const state = impactedState(segment, share, clock.day, impact, weather, activity ?? { minutes: clock.minutes, date: clock.date });
     const factors = weatherFactors(segment.cls, weather);
     const weatherActive = factors.speed < 1 || factors.capacity < 1;
     const level = LEVELS.find((item) => item.id === state.level)!;
@@ -62,7 +64,7 @@ export default function RoadPanel({ segment, data, clock, closed, impact, weathe
     const assumption = CLASS_ASSUMPTIONS[segment.cls];
     const daily = clock.day === "weekday" ? segment.weekdayDaily : segment.weekendDaily;
     const labels = directions(segment);
-    const ratios = profile.map((value) => directionState(segment, value, clock.day, weather).ratio);
+    const ratios = profile.map((value, index) => directionState(segment, value, clock.day, weather, { ...activity, minutes: index * 15 + 7.5, date: clock.date }).ratio);
     const maxRatio = Math.max(1.1, ...ratios);
     const y = (ratio: number) => CHART_H - (ratio / maxRatio) * (CHART_H - 4);
     const line = ratios.map((ratio, index) => `${((index + 0.5) / ratios.length) * CHART_W},${y(ratio)}`).join(" L");
@@ -104,6 +106,7 @@ export default function RoadPanel({ segment, data, clock, closed, impact, weathe
       </figure>
 
       <p className="road-panel-source">{sourceText(segment)}</p>
+      {segment.activity && (segment.activity.employment > 0 || segment.activity.venues.length > 0) ? <p className="road-panel-source">Includes illustrative local activity adjustments: weekday employment peaks and published Blue Jays game arrival/departure windows. Venue attendance, driving share and influence distances are assumptions, not measured event traffic.</p> : null}
       <p className="road-panel-source">
         Assumes {Math.round(state.capacity).toLocaleString()} vehicles/hour capacity per direction and {Math.round(state.freeSpeedKmh)} km/h when uncongested.
       </p>

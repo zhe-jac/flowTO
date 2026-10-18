@@ -2,6 +2,7 @@ import { DRY_WEATHER, type WeatherRates } from "../weather";
 import type { Disruption } from "../disruptions";
 import { directionState, congestedSpeed, levelFor, profileShare } from "./model";
 import type { DayType, TrafficData, TrafficSegment } from "./types";
+import { suppressedVenues, type ActivityContext } from "./activity";
 
 export type Impact = { addedHourly: number; retained: number; capacityScale: number };
 export type RouteOption = { id: string; roads: string[]; minutes: number };
@@ -12,13 +13,14 @@ const node = (p: number[]) => `${p[0].toFixed(5)},${p[1].toFixed(5)}`;
 const distance = (a: number[], b: number[]) => Math.hypot((a[0] - b[0]) * 80000, (a[1] - b[1]) * 111000);
 
 /** Directed endpoint graph. Only connected, legal routes can be offered to Gemini. */
-export function scenariosFor(data: TrafficData, items: Disruption[], day: DayType, minutes: number, weather: WeatherRates = DRY_WEATHER): Scenario[] {
+export function scenariosFor(data: TrafficData, items: Disruption[], day: DayType, minutes: number, weather: WeatherRates = DRY_WEATHER, date?: string): Scenario[] {
+  const context = { minutes, date, suppressedVenues: suppressedVenues(items) };
   const blocked = new Set(items.flatMap(i => i.kind !== "event" ? [i.roadId] : []));
   const graph = new Map<string, { to: string; road: TrafficSegment; cost: number }[]>();
   const share = profileShare(data.profiles[day], minutes);
   const add = (from: string, to: string, road: TrafficSegment) => {
     const edges = graph.get(from) ?? [];
-    edges.push({ to, road, cost: road.lengthM / 1000 / directionState(road, share, day, weather).speedKmh * 60 });
+    edges.push({ to, road, cost: road.lengthM / 1000 / directionState(road, share, day, weather, context).speedKmh * 60 });
     graph.set(from, edges);
   };
   for (const road of data.segments) {
@@ -68,7 +70,7 @@ export function scenariosFor(data: TrafficData, items: Disruption[], day: DayTyp
     const road = data.segments.find(s => s.id === item.roadId);
     if (!road) return [];
     const retained = item.restriction === "full-closure" ? 0 : 0.55;
-    const state = directionState(road, share, day, weather);
+    const state = directionState(road, share, day, weather, context);
     const first = node(road.coords[0]), last = node(road.coords.at(-1)!);
     const pairs = road.oneway === 0 ? [[first, last], [last, first]] : [road.oneway === 1 ? [first, last] : [last, first]];
     return pairs.map(([from, to], index) => ({ item: { ...item, id: `${item.id}:${index}` }, routes: routes(from, to), demand: state.flow * (1 - retained), retained }));
@@ -98,8 +100,8 @@ export function buildPlan(scenarios: Scenario[], choices: Choice[] = [], source:
   return { impacts, source, summary: `${source === "gemini" ? "Gemini" : "Local estimate"}: ${Object.keys(impacts).length} road segments affected.${stranded ? " Some demand has no connected detour and remains queued." : ""}` };
 }
 
-export function impactedState(segment: TrafficSegment, share: number, day: DayType, impact?: Impact, weather: WeatherRates = DRY_WEATHER) {
-  const base = directionState(segment, share, day, weather);
+export function impactedState(segment: TrafficSegment, share: number, day: DayType, impact?: Impact, weather: WeatherRates = DRY_WEATHER, context?: ActivityContext) {
+  const base = directionState(segment, share, day, weather, context);
   if (!impact) return base;
   const flow = base.flow * impact.retained + impact.addedHourly / (segment.oneway === 0 ? 2 : 1);
   const capacity = base.capacity * impact.capacityScale;

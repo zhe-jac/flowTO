@@ -1,5 +1,6 @@
 import { DRY_WEATHER, type WeatherRates } from "../weather";
 import { weatherFactors } from "./weather";
+import { activityFactor, type ActivityContext, type RoadActivity } from "./activity";
 import { CLASS_ASSUMPTIONS, type DayType, type TrafficSegment } from "./types";
 export type CongestionLevel = "free" | "moderate" | "heavy" | "severe";
 export const LEVELS: {
@@ -51,9 +52,9 @@ export function capacityPerDirection(segment: Pick<TrafficSegment, "cls" | "onew
 export function congestedSpeed(freeSpeedKmh: number, ratio: number) {
     return Math.max(4, freeSpeedKmh / (1 + 0.15 * ratio ** 4));
 }
-export function directionState(segment: Pick<TrafficSegment, "cls" | "oneway" | "weekdayDaily" | "weekendDaily">, share: number, day: DayType = "weekday", weather: WeatherRates = DRY_WEATHER): DirectionState {
+export function directionState(segment: Pick<TrafficSegment, "cls" | "oneway" | "weekdayDaily" | "weekendDaily"> & { activity?: RoadActivity }, share: number, day: DayType = "weekday", weather: WeatherRates = DRY_WEATHER, context?: ActivityContext): DirectionState {
     const daily = day === "weekday" ? segment.weekdayDaily : segment.weekendDaily;
-    const hourly = daily * share * 4;
+    const hourly = daily * share * 4 * activityFactor(segment.activity, day, context);
     const flow = segment.oneway === 0 ? hourly / 2 : hourly;
     const factors = weatherFactors(segment.cls, weather);
     const capacity = capacityPerDirection(segment) * factors.capacity;

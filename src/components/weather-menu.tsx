@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef } from "react";
 import GlassSurface from "./glass-surface";
+import DisruptionIcon from "./disruption-icon";
 import SlidingControl from "./sliding-control";
 import type { TorontoWeather, WeatherMode } from "@/lib/current-weather";
 import { CLEAR_WEATHER, weatherIntensity, weatherLevel, weatherSummary, type WeatherState } from "@/lib/weather";
@@ -55,7 +56,7 @@ export default function WeatherMenu({ open, onOpenChange, weather, onChange, mod
   return <div className="weather-menu" data-map-ui>
     <GlassSurface variant="button"><button ref={triggerRef} type="button" className="toolbox-toggle weather-toggle" aria-label={`Weather settings: ${weatherSummary(weather)}`} aria-expanded={open} aria-controls={open ? id : undefined} title="Weather settings" onClick={() => onOpenChange(!open)}><WeatherIcon kind="weather" />{active ? <span className="weather-active-dot" aria-hidden="true" /> : null}</button></GlassSurface>
     {open ? <section ref={panelRef} id={id} className="toolbox-panel weather-panel" aria-label="Weather settings">
-      <div className="toolbox-heading"><div><span className="toolbox-eyebrow">SET THE CONDITIONS</span><h2>Weather</h2></div><button ref={closeRef} className="toolbox-close" type="button" aria-label="Close weather settings" onClick={close}>×</button></div>
+      <div className="toolbox-heading"><div><span className="toolbox-eyebrow">SET THE CONDITIONS</span><h2>Weather</h2></div><button ref={closeRef} className="toolbox-close" type="button" aria-label="Close weather settings" onClick={close}><DisruptionIcon kind="close" /></button></div>
       <SlidingControl className="traffic-segmented weather-mode" label="Weather source" value={mode}>
         <button type="button" aria-pressed={mode === "current"} disabled={!presentTime} onClick={() => onModeChange("current")}>Current Toronto</button>
         <button type="button" aria-pressed={mode === "manual"} onClick={() => onModeChange("manual")}>Manual</button>

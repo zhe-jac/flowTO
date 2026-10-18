@@ -1,5 +1,6 @@
 import { parseWeatherRates, type WeatherRates } from "@/lib/weather";
-import { readFile } from "node:fs/promises";
+import { trafficData } from "@/lib/traffic/server-data";
+import { validSimulationDate } from "@/lib/traffic/simulation-date";
 import { NextResponse } from "next/server";
 import { validateDisruption, type Disruption } from "@/lib/disruptions";
 import { buildPlan, scenariosFor, validateChoices } from "@/lib/traffic/rerouting";
@@ -9,11 +10,11 @@ import { validRoadExtent } from "@/lib/road-extent";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
-let traffic: Promise<TrafficData> | undefined;
+
 const cache = new Map<string, { expires: number; plan: unknown }>();
 let inFlight = 0;
 export async function POST(request: Request) {
-  let items: Disruption[], day: "weekday" | "weekend", minutes: number, weather: WeatherRates;
+  let items: Disruption[], day: "weekday" | "weekend", minutes: number, weather: WeatherRates, date: string | undefined;
   try {
     const text = await request.text();
     if (text.length > 40000) throw new Error();
@@ -24,21 +25,23 @@ export async function POST(request: Request) {
     }
     if (new Set(body.items.map((i: Disruption) => i.id)).size !== body.items.length) throw new Error();
     weather = parseWeatherRates(body.weather);
+    if (body.date !== undefined && !validSimulationDate(body.date)) throw new Error();
+    date = body.date;
     ({ items, day, minutes } = body);
   } catch { return NextResponse.json({ error: "Invalid disruption scenario or weather rates (maximum 20 items)." }, { status: 400 }); }
-  const key = JSON.stringify({ items, day, minutes, weather });
+  const key = JSON.stringify({ items, day, minutes, weather, date });
   const cached = cache.get(key);
   if (cached && cached.expires > Date.now()) return NextResponse.json(cached.plan);
   if (inFlight >= 2) return NextResponse.json({ error: "Traffic analysis is busy. Please retry." }, { status: 429 });
   inFlight++;
   try {
-    const data: TrafficData = await (traffic ??= readFile(`${process.cwd()}/public/data/traffic.json`, "utf8").then(text => JSON.parse(text) as TrafficData));
+    const data: TrafficData = await trafficData();
     const roadCoordinates = new Map(data.segments.map(s => [s.id, s.coords]));
     if (items.some(item => item.kind !== "event" && !validRoadExtent(item, id => roadCoordinates.get(id)))) return NextResponse.json({ error: "Choose a continuous road stretch from the available streets." }, { status: 400 });
     const expanded = expandRoadDisruptions(items);
     // Overlapping restrictions reduce capacity once, using the strongest restriction.
     const unique = expanded.filter((item, index) => item.kind === "event" || !expanded.some((other, j) => other.kind !== "event" && other.roadId === item.roadId && (other.restriction === "full-closure" && item.restriction !== "full-closure" || other.restriction === item.restriction && j < index)));
-    const scenarios = scenariosFor(data, unique, day, minutes, weather);
+    const scenarios = scenariosFor(data, unique, day, minutes, weather, date);
     let plan = buildPlan(scenarios);
     if (scenarios.length) {
       try {

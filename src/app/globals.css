@@ -2,6 +2,36 @@
   box-sizing: border-box;
 }
 
+.traffic-chat { position: absolute; z-index: 4; top: 202px; left: 16px; width: 48px; color: var(--ui-ink); }
+.traffic-chat > .toolbox-glass-panel { position: absolute; left: 60px; top: -120px; width: min(420px, calc(100vw - 100px)); }
+.traffic-chat-panel { position: relative; width: 100%; overflow-y: auto; height: min(660px, calc(100dvh - 104px)); max-height: calc(100dvh - 104px); display: flex; flex-direction: column; padding: 20px; border: 1px solid var(--glass-border); border-radius: 24px; background: var(--glass-panel-tint); box-shadow: var(--glass-shadow); backdrop-filter: blur(var(--glass-blur)); -webkit-backdrop-filter: blur(var(--glass-blur)); animation: chat-enter 180ms ease-out; }
+.traffic-chat-panel .toolbox-heading { flex-shrink: 0; }
+.traffic-chat-note, .traffic-chat-footer small { color: var(--ui-muted); font-size: 12px; line-height: 1.5; }
+.traffic-chat-note { margin: 10px 0; }
+.traffic-chat-log { overflow-y: auto; overscroll-behavior: contain; min-height: 0; flex: 1; padding: 4px 1px 12px; }
+.traffic-chat button, .traffic-chat textarea { font: inherit; color: inherit; }
+.traffic-chat-message { margin: 10px 0; padding: 12px; border-radius: 16px; background: color-mix(in srgb, var(--ui-ink) 6%, transparent); font-size: 13px; }
+.traffic-chat-message[data-role="user"] { margin-left: 24px; background: color-mix(in srgb, var(--ui-accent) 12%, transparent); }
+.traffic-chat-message > strong { font-size: 11px; color: var(--ui-muted); }
+.traffic-chat-message p { margin: 6px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.6; }
+.traffic-chat-examples p { font-size: 14px; }
+.traffic-chat-examples button { display: block; width: 100%; text-align: left; margin: 8px 0; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--ui-muted) 20%, transparent); border-radius: 12px; background: transparent; font-size: 12px; line-height: 1.5; cursor: pointer; }
+.traffic-chat-proposals { margin-top: 12px; border-top: 1px solid color-mix(in srgb, var(--ui-muted) 20%, transparent); padding-top: 10px; }
+.traffic-chat-proposals small { display: block; margin: 5px 0 12px; line-height: 1.5; }
+.traffic-chat-panel form { flex-shrink: 0; }
+.traffic-chat-panel textarea { width: 100%; display: block; margin-top: 6px; padding: 12px; resize: vertical; max-height: 160px; min-height: 72px; border-radius: 14px; border: 1px solid color-mix(in srgb, var(--ui-muted) 30%, transparent); background: color-mix(in srgb, var(--glass-panel-tint) 70%, transparent); font-size: 13px; }
+.traffic-chat-panel textarea::placeholder { color: var(--ui-muted); }
+.traffic-chat-footer { display: flex; align-items: center; gap: 10px; justify-content: space-between; margin-top: 10px; }
+.traffic-chat-footer button, .traffic-chat-proposals button { border: 0; border-radius: 12px; padding: 9px 14px; background: var(--ui-accent); color: var(--glass-panel-tint); font-weight: 600; cursor: pointer; }
+.traffic-chat-footer button { font-family: inherit; font-size: 12px; font-weight: 600; }
+.traffic-chat button:disabled { opacity: 0.5; cursor: default; }
+.traffic-chat :is(button, textarea):focus-visible { outline: 2px solid var(--ui-accent); outline-offset: 3px; }
+.traffic-chat textarea:focus-visible { outline-offset: -3px; }
+.traffic-chat-error { color: var(--ui-ink); border-left: 3px solid #bc7359; padding-left: 10px; font-size: 12px; line-height: 1.5; }
+@keyframes chat-enter { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+@media (max-height: 720px) { .traffic-chat > .toolbox-glass-panel { position: fixed; top: 16px; left: 76px; } .traffic-chat-panel { height: min(660px, calc(100dvh - 32px)); max-height: calc(100dvh - 32px); } }
+@media (prefers-reduced-motion: reduce) { .traffic-chat-panel { animation: none; } }
+
 /* Registered as colours so the glass theme fades through dawn and dusk instead of flipping. */
 @property --ui-ink { syntax: "<color>"; inherits: true; initial-value: #25465d; }
 @property --ui-muted { syntax: "<color>"; inherits: true; initial-value: #365268; }
@@ -306,6 +336,13 @@ button {
   width: min(282px, calc(100vw - 88px));
   max-height: calc(100dvh - 200px);
   overflow-y: auto;
+}
+
+.closure-toolbox > .toolbox-floating-panel {
+  position: absolute;
+  top: 0;
+  left: 60px;
+  max-width: calc(100vw - 88px);
 }
 
 .weather-active-dot {

@@ -20,7 +20,7 @@ import DisruptionScenes from "./disruption-scenes";
 import DisruptionEndpoints from "./disruption-endpoints";
 import { extentDetails } from "@/lib/road-extent";
 import { setBuildingFadeFocus } from "@/lib/building-fade";
-import { motion, type Transition, type Variants } from "motion/react";
+
 
 type Placement = { kind: DisruptionKind; position: Coordinate; point: ScreenPoint; road?: Road };
 type Drag = { pointerId: number; start: ScreenPoint; moved: boolean; kind: DisruptionKind; item?: Disruption };
@@ -29,39 +29,13 @@ const EMPTY: FeatureCollection = { type: "FeatureCollection", features: [] };
 const SOURCES = ["disruption-roads", "disruption-active", "disruption-applied"];
 const LAYERS = ["disruption-road-guides", "disruption-road-targets", ...["applied", "active"].flatMap((kind) => ["halo", "line", "stripes", "ends", "locations"].map((layer) => `disruption-${kind}-${layer}`))];
 
-const MORPH_SPRING: Transition = { type: "spring", stiffness: 260, damping: 25 };
-/** Panel content fades in with a stagger once the panel has started expanding, and fades out before it shrinks. */
-const BUTTON_SIZE = 48;
-const PANEL_WIDTH = 282;
-const MORPH_PANEL: Variants = {
-  hidden: { opacity: 0 },
-  shown: { opacity: 1, transition: { duration: 0.12, delayChildren: 0.1, staggerChildren: 0.04 } },
-  exit: { opacity: 0, transition: { duration: 0.12, when: "afterChildren" } },
-};
-const MORPH_ITEM: Variants = {
-  hidden: { opacity: 0, y: 6 },
-  shown: { opacity: 1, y: 0, transition: { duration: 0.26, ease: [0.22, 1, 0.36, 1] } },
-  exit: { opacity: 0, y: 4, transition: { duration: 0.1 } },
-};
-
-export default function DisruptionToolbox({ map, onItemsChange, onInteractionChange, open, onOpenChange, suspended }: { map: DisruptionMap; onItemsChange: (items: Disruption[]) => void; onInteractionChange: (active: boolean) => void; open: boolean; onOpenChange: (open: boolean) => void; suspended: boolean }) {
+export default function DisruptionToolbox({ map, items, setItems, onInteractionChange, open, onOpenChange, suspended }: { map: DisruptionMap; items: Disruption[]; setItems: import("react").Dispatch<import("react").SetStateAction<Disruption[]>>; onInteractionChange: (active: boolean) => void; open: boolean; onOpenChange: (open: boolean) => void; suspended: boolean }) {
   const toggleRef = useRef<HTMLButtonElement>(null);
-  // The panel stays mounted (hidden when closed) so its height is known and the container can spring to it.
-  const panelRef = useRef<HTMLElement>(null);
-  const [panelHeight, setPanelHeight] = useState(0);
-  useEffect(() => {
-    const panel = panelRef.current;
-    if (!panel) return;
-    const observer = new ResizeObserver(() => setPanelHeight(Math.round(panel.getBoundingClientRect().height)));
-    observer.observe(panel);
-    return () => observer.disconnect();
-  }, []);
   const [loadState, setLoadState] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [retry, setRetry] = useState(0);
   const [activeTool, setActiveTool] = useState<DisruptionKind | null>(null);
   const [ghost, setGhost] = useState<Ghost | null>(null);
   const [draft, setDraft] = useState<Disruption | null>(null);
-  const [items, setItems] = useState<Disruption[]>([]);
   const [modelsReady, setModelsReady] = useState(false);
   const sceneItems = useMemo(() => [...items.filter((item) => item.id !== draft?.id), ...(draft ? [draft] : [])], [items, draft]);
   const [formError, setFormError] = useState("");
@@ -78,7 +52,6 @@ export default function DisruptionToolbox({ map, onItemsChange, onInteractionCha
   const toolButtonsRef = useRef(new Map<DisruptionKind, HTMLButtonElement>());
   const interacting = !!activeTool || !!ghost || !!draft;
 
-  useEffect(() => { onItemsChange(items); }, [items, onItemsChange]);
   useEffect(() => { onInteractionChange(interacting); }, [interacting, onInteractionChange]);
 
   useEffect(() => {
@@ -382,22 +355,18 @@ export default function DisruptionToolbox({ map, onItemsChange, onInteractionCha
       <DisruptionMarkers map={map} items={items} draft={draft} modelsReady={modelsReady} placing={!!activeTool || !!ghost} onDrag={(event, item) => startDrag(event, item.kind, item)} onSelect={selectItem} />
       {draft && draft.kind !== "event" ? <DisruptionEndpoints map={map} draft={draft} roads={roadsRef.current} onChange={item => { setDraft(item); setFormError(""); }} /> : null}
       <div className="closure-toolbox" data-map-ui>
-        <motion.div className="toolbox-morph" data-open={open} initial={false}
-          animate={{ width: PANEL_WIDTH, height: open ? panelHeight || BUTTON_SIZE : 0, opacity: open ? 1 : 0, borderRadius: 24 }}
-          transition={open ? MORPH_SPRING : { ...MORPH_SPRING, delay: 0.1 }}>
-              <motion.section ref={panelRef} className="toolbox-panel" id="disruption-toolbox-panel" aria-label="Disruption toolbox" aria-hidden={!open} inert={!open} onKeyDown={event => { if (event.key === "Escape") { event.stopPropagation(); toggleToolbox(); } }} variants={MORPH_PANEL} initial={false} animate={open ? "shown" : "exit"}>
-                <motion.div variants={MORPH_ITEM} className="toolbox-heading"><div><span className="toolbox-eyebrow">PLAN ON THE MAP</span><h2>Toolbox</h2></div><button className="toolbox-close" type="button" aria-label="Close toolbox" onClick={toggleToolbox}><DisruptionIcon kind="close" /></button></motion.div>
-                <motion.div variants={MORPH_ITEM} className="disruption-tool-grid">{DISRUPTION_TOOLS.map((tool) => <button key={tool.kind} ref={(node) => { if (node) toolButtonsRef.current.set(tool.kind, node); else toolButtonsRef.current.delete(tool.kind); }} className="closure-drag-tool" type="button" data-kind={tool.kind} disabled={tool.kind !== "event" && loadState !== "ready"} aria-pressed={activeTool === tool.kind} aria-describedby="disruption-tool-help" onPointerDown={(event) => startDrag(event, tool.kind)} onClick={(event) => { if (event.detail === 0) activateRef.current(tool.kind); }}><span className="closure-tool-icon"><DisruptionIcon kind={tool.kind} /></span><strong>{tool.label}</strong><small>{tool.hint}</small><span className="closure-grip" aria-hidden="true">⠿</span></button>)}</motion.div>
-                <motion.p variants={MORPH_ITEM} id="disruption-tool-help" className="toolbox-help">Drag a tool onto the map, or click a tool and then a location. Drag placed markers to move them.</motion.p>
-                <motion.button variants={MORPH_ITEM} className="scenario-reset" type="button" disabled={!items.length && !draft && !activeTool && !ghost} onClick={resetScenario} title="Remove all disruptions and restore baseline traffic">Reset</motion.button>
-                {loadState === "loading" ? <motion.p variants={MORPH_ITEM} className="toolbox-loading" role="status">Loading streets for road tools…</motion.p> : null}
-                {loadState === "error" ? <motion.p variants={MORPH_ITEM} className="toolbox-load-error" role="alert">Street tools could not load. Events are still available. <button type="button" onClick={() => setRetry((value) => value + 1)}>Try again</button></motion.p> : null}
-                <motion.div variants={MORPH_ITEM} className="toolbox-coverage"><span>Street tools: downtown</span><button type="button" onClick={() => map.fitBounds([[-79.435, 43.63], [-79.345, 43.685]], { padding: { top: 100, bottom: 80, left: Math.min(340, map.getCanvas().clientWidth / 3), right: 60 }, duration: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 700 })}>Show area <span aria-hidden="true">↗</span></button></motion.div>
-                {items.length ? <motion.div variants={MORPH_ITEM} className="closure-list"><span className="toolbox-eyebrow">PLACED ITEMS · {items.length}</span>{items.map((item) => <button type="button" key={item.id} data-kind={item.kind} onClick={() => selectItem(item)}><span className="disruption-list-icon"><DisruptionIcon kind={item.kind} /></span><span>{item.title}<small>{disruptionTool(item.kind).label}{item.kind === "event" ? item.attendance === null ? " · attendance not set" : ` · ${item.attendance.toLocaleString()} attendees` : ` · ${roadsRef.current.get(item.roadId)?.properties.name ?? "Street segment"}`}</small></span><DisruptionIcon kind="arrow" /></button>)}</motion.div> : null}
-              </motion.section>
-        </motion.div>
+        {open ? <section className="toolbox-panel toolbox-floating-panel" id="disruption-toolbox-panel" aria-label="Disruption toolbox" onKeyDown={event => { if (event.key === "Escape") { event.stopPropagation(); toggleToolbox(); } }}>
+                <div className="toolbox-heading"><div><span className="toolbox-eyebrow">PLAN ON THE MAP</span><h2>Toolbox</h2></div><button className="toolbox-close" type="button" aria-label="Close toolbox" onClick={toggleToolbox}><DisruptionIcon kind="close" /></button></div>
+                <div className="disruption-tool-grid">{DISRUPTION_TOOLS.map((tool) => <button key={tool.kind} ref={(node) => { if (node) toolButtonsRef.current.set(tool.kind, node); else toolButtonsRef.current.delete(tool.kind); }} className="closure-drag-tool" type="button" data-kind={tool.kind} disabled={tool.kind !== "event" && loadState !== "ready"} aria-pressed={activeTool === tool.kind} aria-describedby="disruption-tool-help" onPointerDown={(event) => startDrag(event, tool.kind)} onClick={(event) => { if (event.detail === 0) activateRef.current(tool.kind); }}><span className="closure-tool-icon"><DisruptionIcon kind={tool.kind} /></span><strong>{tool.label}</strong><small>{tool.hint}</small><span className="closure-grip" aria-hidden="true">⠿</span></button>)}</div>
+                <p id="disruption-tool-help" className="toolbox-help">Drag a tool onto the map, or click a tool and then a location. Drag placed markers to move them.</p>
+                <button className="scenario-reset" type="button" disabled={!items.length && !draft && !activeTool && !ghost} onClick={resetScenario} title="Remove all disruptions and restore baseline traffic">Reset</button>
+                {loadState === "loading" ? <p className="toolbox-loading" role="status">Loading streets for road tools…</p> : null}
+                {loadState === "error" ? <p className="toolbox-load-error" role="alert">Street tools could not load. Events are still available. <button type="button" onClick={() => setRetry((value) => value + 1)}>Try again</button></p> : null}
+                <div className="toolbox-coverage"><span>Street tools: downtown</span><button type="button" onClick={() => map.fitBounds([[-79.435, 43.63], [-79.345, 43.685]], { padding: { top: 100, bottom: 80, left: Math.min(340, map.getCanvas().clientWidth / 3), right: 60 }, duration: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 700 })}>Show area <span aria-hidden="true">↗</span></button></div>
+                {items.length ? <div className="closure-list"><span className="toolbox-eyebrow">PLACED ITEMS · {items.length}</span>{items.map((item) => <button type="button" key={item.id} data-kind={item.kind} onClick={() => selectItem(item)}><span className="disruption-list-icon"><DisruptionIcon kind={item.kind} /></span><span>{item.title}<small>{disruptionTool(item.kind).label}{item.kind === "event" ? item.attendance === null ? " · attendance not set" : ` · ${item.attendance.toLocaleString()} attendees` : ` · ${roadsRef.current.get(item.roadId)?.properties.name ?? "Street segment"}`}</small></span><DisruptionIcon kind="arrow" /></button>)}</div> : null}
+        </section> : null}
         <GlassSurface variant="button"><button ref={toggleRef} className="toolbox-toggle" type="button" aria-label={items.length ? `Disruption toolbox, ${items.length} placed ${items.length === 1 ? "item" : "items"}` : "Disruption toolbox"} aria-expanded={open} aria-controls="disruption-toolbox-panel" title="Disruption toolbox" onClick={toggleToolbox}><DisruptionIcon kind="toolbox" /></button></GlassSurface>
-        {items.length ? <motion.span className="toolbox-count" aria-hidden="true" initial={false} animate={{ opacity: 1 }}>{items.length}</motion.span> : null}
+        {items.length ? <span className="toolbox-count" aria-hidden="true">{items.length}</span> : null}
       </div>
       {draft ? <DisruptionEditor draft={draft} road={draft.kind === "event" ? undefined : roadsRef.current.get(draft.roadId)} extent={draft.kind === "event" ? undefined : extentDetails(draft, roadsRef.current)} existing={existing} error={formError} onChange={(item) => { setDraft(item); setFormError(""); }} onSave={saveDraft} onCancel={() => { setDraft(null); setFormError(""); toolButtonsRef.current.get(draft.kind)?.focus(); }} onRemove={() => { setItems((current) => current.filter((item) => item.id !== draft.id)); setDraft(null); setNotice(`${disruptionTool(draft.kind).label} removed.`); toolButtonsRef.current.get(draft.kind)?.focus(); }} /> : null}
       {activeTool || ghost ? <div className="closure-placement-help" data-map-ui data-kind={activeTool ?? ghost?.kind}><span className="closure-status-dot" /><span>{ghost?.keyboard ? "Arrow keys move the map · Enter previews the location" : ghost?.valid ? `${ghost.dragging ? "Release" : "Click"} to preview ${ghost.name}` : activeTool === "event" ? "Choose an event location inside Toronto" : "Choose a highlighted downtown street"}</span><button type="button" onClick={() => cancelRef.current()}>Cancel <kbd>Esc</kbd></button></div> : null}

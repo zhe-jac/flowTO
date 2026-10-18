@@ -1,5 +1,14 @@
 # Roadmap: Toronto Traffic Sandbox
 
+## Current priorities (team update)
+
+- **Now:** themed Gemini chat for specific event/road proposals and grounded traffic summaries; employment-hub and dated sports/venue demand context.
+- **Good enough for the demo:** existing map/UI, Before/After toggle, rerouting and citywide weather. Do not expand these ahead of the chat workflow.
+- **Later:** longer-term congestion/time skipping and further traffic-data coverage.
+- **Final stage:** camera presets; satellite/other basemap layers; playback time windows; results/dashboard; sharing; methodology/documentation; localised weather; and a database of scenario/test runs with aggregate graphs for comparing larger traffic patterns.
+
+The original phase checklist below is a reference plan, not an accurate implementation-status checklist. A trip-based queue simulation and calibrated outcomes remain separate from the current illustrative road-flow model.
+
 Everything needed to go from an empty repo to a judged, submitted project. Tasks are tagged by priority:
 
 - **P0:** the demo does not work without it. Build first.

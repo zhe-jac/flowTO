@@ -24,7 +24,9 @@ import { disruptionStrength, disruptionWindow, splitPath } from "@/lib/traffic/s
 import { formatClock } from "@/lib/traffic/model";
 import { tweenValue, retargetTween, junctionBlend, COLOUR_TRANSITION_MS, HIGHLIGHT_TRANSITION_MS, type VisualTween } from "@/lib/traffic/visual-transition";
 import { comparisonImpacts } from "@/lib/traffic/comparison";
+import { enrichTrafficData, suppressedVenues } from "@/lib/traffic/activity";
 import { useRerouting } from "./use-rerouting";
+import type { ChatTrafficContext } from "@/lib/traffic/chat";
 import { dateAtNoon } from "@/lib/traffic/simulation-date";
 import { buildingFadeStrength } from "@/lib/building-fade";
 import type { BuildingFadeController } from "@/lib/building-fade-layer";
@@ -69,6 +71,7 @@ type Props = {
     onLightChange: (light: SimulatorLight) => void;
     onPresentTimeChange: (current: boolean) => void;
     buildingFade: BuildingFadeController | null;
+    onChatContext: (context: ChatTrafficContext) => void;
 };
 function buildFlows(segments: TrafficSegment[]) {
     const flows: Flow[] = [];
@@ -83,7 +86,7 @@ function buildFlows(segments: TrafficSegment[]) {
     });
     return flows;
 }
-export default function TrafficOverlay({ map, renderer, items, interacting, onLightChange, onPresentTimeChange, buildingFade, weather }: Props) {
+export default function TrafficOverlay({ map, renderer, items, interacting, onLightChange, onPresentTimeChange, buildingFade, weather, onChatContext }: Props) {
     const [data, setData] = useState<TrafficData | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [retry, setRetry] = useState(0);
@@ -109,10 +112,14 @@ export default function TrafficOverlay({ map, renderer, items, interacting, onLi
     const strengths = items.map((item) => disruptionStrength(item, placedAtRef.current.get(item.id) ?? snapshot.clock.minutes, snapshot.clock.minutes));
     const nextStart = items.map((item, i) => strengths[i] > 0 ? null : disruptionWindow(item, placedAtRef.current.get(item.id) ?? 0).start).find((start) => start !== null) ?? null;
     const activeItems = items.filter((_, i) => strengths[i] > 0);
-    const rerouting = useRerouting(activeItems, snapshot.clock.day, snapshot.clock.minutes, weather);
+    const rerouting = useRerouting(activeItems, snapshot.clock.day, snapshot.clock.minutes, weather, snapshot.clock.date);
     const impacts = rerouting.plan?.impacts;
     const impactKey = JSON.stringify(rerouting.plan ?? {});
     const displayed = comparisonImpacts(rerouting.plan, items, placedAtRef.current, snapshot.clock.minutes, compare);
+    const chatKey = JSON.stringify({ date: snapshot.clock.date, minutes: Math.floor(snapshot.clock.minutes), day: snapshot.clock.day, source: rerouting.loading ? "pending" : rerouting.plan?.source ?? "baseline", impacts: displayed.impacts });
+    useEffect(() => {
+        onChatContext(JSON.parse(chatKey));
+    }, [chatKey, onChatContext]);
     const closureKey = [...closed].sort().join(",") + impactKey;
     const latestRef = useRef({ closed, closureKey, interacting, impacts, items, compare, weather, plan: rerouting.plan });
     useEffect(() => {
@@ -138,7 +145,7 @@ export default function TrafficOverlay({ map, renderer, items, interacting, onLi
             if (!result.segments?.length || result.profiles?.weekday?.length !== 96 || result.profiles?.weekend?.length !== 96)
                 throw new Error("Traffic estimates are unavailable. Try again.");
             if (!controller.signal.aborted)
-                setData(result);
+                setData(enrichTrafficData(result));
         })
             .catch((cause: unknown) => { if (!controller.signal.aborted)
             setError(cause instanceof Error ? cause.message : "Traffic estimates could not load."); });
@@ -231,10 +238,11 @@ export default function TrafficOverlay({ map, renderer, items, interacting, onLi
             }
         };
         const refreshState = () => {
-            const { minutes, day } = clockRef.current;
+            const { minutes, day, date } = clockRef.current;
             const { closureKey, items: scenarioItems, impacts: planImpacts, compare: mode, weather } = latestRef.current;
             const strengths = scenarioItems.map((item) => mode === "before" ? 0 : disruptionStrength(item, placedAtRef.current.get(item.id) ?? minutes, minutes));
-            const activeKey = `${closureKey}|${mode}|${weather.rainMmPerHour},${weather.snowCmPerHour}|${scenarioItems.map((item, i) => strengths[i] > 0 ? item.id : "").join(",")}`;
+            const activity = { minutes, date, suppressedVenues: suppressedVenues(scenarioItems.filter((_, i) => strengths[i] > 0)) };
+            const activeKey = `${date}|${closureKey}|${mode}|${weather.rainMmPerHour},${weather.snowCmPerHour}|${scenarioItems.map((item, i) => strengths[i] > 0 ? item.id : "").join(",")}`;
             if (day === stateDay && Math.abs(minutes - stateMinutes) < 0.5 && stateClosures === activeKey)
                 return;
             stateMinutes = minutes;
@@ -249,7 +257,7 @@ export default function TrafficOverlay({ map, renderer, items, interacting, onLi
             const areaImpacts = planImpacts ?? {};
             const impacts = effective.impacts;
             const share = profileShare(data.profiles[day], minutes);
-            const states = segments.map((segment) => impactedState(segment, share, day, impacts[segment.id], weather));
+            const states = segments.map((segment) => impactedState(segment, share, day, impacts[segment.id], weather, activity));
             states.forEach((state, index) => { targetLevels[index] = congestionPosition(state.ratio); });
             vehicles = segments.reduce((sum, segment, i) => sum + (effectiveClosed.has(segment.id) ? 0 : states[i].flow / Math.max(1, states[i].speedKmh) * segment.lengthM / 1000 * (segment.oneway === 0 ? 2 : 1)), 0);
             let colorsChanged = false;
@@ -299,8 +307,8 @@ export default function TrafficOverlay({ map, renderer, items, interacting, onLi
             for (const id of ids) {
                 const index = segmentIndex.get(id);
                 if (index === undefined) continue;
-                const baseline = directionState(segments[index], share, day, weather);
-                const full = impactedState(segments[index], share, day, areaImpacts[id], weather);
+                const baseline = directionState(segments[index], share, day, weather, activity);
+                const full = impactedState(segments[index], share, day, areaImpacts[id], weather, activity);
                 displayLevel.set(index, targetLevels[index]);
                 if (full.level !== baseline.level || full.ratio - baseline.ratio > 0.08 || (areaImpacts[id]?.capacityScale ?? 1) < 1) nextHighlights.add(index);
             }
@@ -317,7 +325,7 @@ export default function TrafficOverlay({ map, renderer, items, interacting, onLi
             for (const id of ids) {
                 const index = segmentIndex.get(id);
                 if (index === undefined) continue;
-                const baseline = congestionPosition(directionState(segments[index], share, day, weather).ratio);
+                const baseline = congestionPosition(directionState(segments[index], share, day, weather, activity).ratio);
                 colourTweens.set(index, retargetTween(colourTweens.get(index), displayLevel.get(index) ?? baseline, now, colourDuration, baseline));
                 emphasisTweens.set(index, retargetTween(emphasisTweens.get(index), highlighted.has(index) ? 1 : 0, now, preference.matches ? 0 : HIGHLIGHT_TRANSITION_MS, 0));
             }
@@ -519,7 +527,7 @@ export default function TrafficOverlay({ map, renderer, items, interacting, onLi
     const selectedSegment = data && selected !== null && !interacting ? data.segments[selected] : null;
     return (<div className="traffic-ui" data-interacting={interacting}>
       {data ? <TrafficControls clock={snapshot.clock} profile={data.profiles[snapshot.clock.day]} vehicles={snapshot.vehicles} closures={displayed.closed.size} onChange={updateClock} scenario={items.length ? { text: [compare === "before" ? "Showing before disruptions" : strengths.every((value) => value === 0) && nextStart !== null ? `Disruptions start at ${formatClock(nextStart)}` : Math.max(...strengths) < 1 ? "Effects building up" : null, rerouting.loading ? "Estimating diversions…" : rerouting.error ?? (rerouting.plan?.warning ? "Local diversion estimate (Gemini unavailable)" : rerouting.plan?.source === "gemini" ? "Diversions estimated with Gemini" : "Local diversion estimate")].filter(Boolean).join(" · "), retry: rerouting.error || rerouting.plan?.warning ? rerouting.retry : undefined, compare, onCompare: setCompare } : null} /> : null}
-      {selectedSegment && data ? <RoadPanel weather={weather} segment={selectedSegment} data={data} clock={snapshot.clock} impact={displayed.impacts[selectedSegment.id]} closed={displayed.closed.has(selectedSegment.id)} onClose={() => setSelected(null)}/> : null}
+      {selectedSegment && data ? <RoadPanel activity={{ minutes: snapshot.clock.minutes, date: snapshot.clock.date, suppressedVenues: compare === "after" ? suppressedVenues(activeItems) : [] }} weather={weather} segment={selectedSegment} data={data} clock={snapshot.clock} impact={displayed.impacts[selectedSegment.id]} closed={displayed.closed.has(selectedSegment.id)} onClose={() => setSelected(null)}/> : null}
       {!data && !error ? <p className="traffic-status" role="status">Loading typical traffic…</p> : null}
       {error ? <p className="traffic-status traffic-status-error" role="alert">{error} <button type="button" onClick={() => { setError(null); setRetry((value) => value + 1); }}>Retry</button></p> : null}
     </div>);

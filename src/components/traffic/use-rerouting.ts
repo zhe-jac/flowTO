@@ -5,12 +5,12 @@ import type { Disruption } from "@/lib/disruptions";
 import type { DayType } from "@/lib/traffic/types";
 import type { ReroutingPlan } from "@/lib/traffic/rerouting";
 
-export function useRerouting(items: Disruption[], day: DayType, minutes: number, weather: WeatherRates) {
+export function useRerouting(items: Disruption[], day: DayType, minutes: number, weather: WeatherRates, date?: string) {
   const [result, setResult] = useState<{ key: string; scenarioKey: string; plan: ReroutingPlan } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [retry, setRetry] = useState(0);
-  const key = JSON.stringify({ items, day, weather, minutes: Math.floor(minutes / 60) * 60 });
-  const scenarioKey = JSON.stringify({ items, day, weather });
+  const key = JSON.stringify({ items, day, weather, date, minutes: Math.floor(minutes / 60) * 60 });
+  const scenarioKey = JSON.stringify({ items, day, weather, date });
   useEffect(() => {
     setError(null);
     if (!items.length) return;

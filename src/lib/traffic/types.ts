@@ -24,6 +24,7 @@ export type VolumeSource = {
     samples?: number;
 };
 export type TrafficSegment = {
+    activity?: import("./activity").RoadActivity;
     id: string;
     name: string;
     cls: string;
