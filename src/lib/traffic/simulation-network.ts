@@ -20,6 +20,7 @@ export function prepareSimulation(data: TrafficData, request: SimulationRequest,
   const nodes = new Map<string, number>();
   const node = (key: string) => { if (!nodes.has(key)) nodes.set(key, nodes.size); return nodes.get(key)!; };
   const coordinateKey = (p: number[]) => `xy:${p[0].toFixed(6)},${p[1].toFixed(6)}`;
+  const bearing = (from: number[], to: number[]) => Math.atan2(to[1] - from[1], (to[0] - from[0]) * Math.cos(from[1] * Math.PI / 180)) * 180 / Math.PI;
   const edges: SimulationEdge[] = [];
   const warnings = new Set<string>(["Demand is inferred from historical counts; turns, lane counts and signal capacity remain estimates.", "The simulation uses a buffered local network. Trips unable to leave it remain accounted for as pending demand."]);
   const day = simulationDayType(request.date);
@@ -35,7 +36,10 @@ export function prepareSimulation(data: TrafficData, request: SimulationRequest,
     const factors = weatherFactors(road.cls, request.weather);
     const lanes = road.oneway === 0 ? assumption.lanes : assumption.onewayLanes;
     const daily = (day === "weekday" ? road.weekdayDaily : road.weekendDaily) / (road.oneway === 0 ? 2 : 1);
-    const add = (direction: 1 | -1) => edges.push({ id: road.id, direction, from: direction === 1 ? from : to, to: direction === 1 ? to : from, length: Math.max(road.lengthM, 1), speed: assumption.freeSpeedKmh * factors.speed, capacity: capacityPerDirection(road) * factors.capacity, storage: Math.max(1, road.lengthM * lanes / 7.5), daily, dailyByDay: [road.weekdayDaily / (road.oneway === 0 ? 2 : 1), road.weekendDaily / (road.oneway === 0 ? 2 : 1)], lanes });
+    const first = road.coords[0], last = road.coords.at(-1)!;
+    const second = road.coords.find(point => point[0] !== first[0] || point[1] !== first[1]) ?? last;
+    const penultimate = road.coords.findLast(point => point[0] !== last[0] || point[1] !== last[1]) ?? first;
+    const add = (direction: 1 | -1) => edges.push({ id: road.id, direction, from: direction === 1 ? from : to, to: direction === 1 ? to : from, length: Math.max(road.lengthM, 1), speed: assumption.freeSpeedKmh * factors.speed, capacity: capacityPerDirection(road) * factors.capacity, storage: Math.max(1, road.lengthM * lanes / 7.5), daily, dailyByDay: [road.weekdayDaily / (road.oneway === 0 ? 2 : 1), road.weekendDaily / (road.oneway === 0 ? 2 : 1)], lanes, entryBearing: direction === 1 ? bearing(first, second) : bearing(last, penultimate), exitBearing: direction === 1 ? bearing(penultimate, last) : bearing(second, first) });
     if (road.oneway !== -1) add(1);
     if (road.oneway !== 1) add(-1);
     if (road.weekdayDaily < 100 && road.source.kind === "intersection") warnings.add("Some surveyed streets have very low observed traffic, possibly reflecting existing restrictions. These observations have been preserved.");

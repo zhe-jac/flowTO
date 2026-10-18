@@ -7,6 +7,7 @@ import SimulationDatePicker from "./simulation-date-picker";
 import { WorkspaceDockPane } from "../workspace-layout";
 import SlidingControl from "../sliding-control";
 const TICKS = [0, 360, 720, 1080, 1440];
+const TIME_KEYS = new Set(["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown"]);
 function profilePath(profile: number[], width: number, height: number) {
     const max = Math.max(...profile);
     const points = profile.map((value, index) => `${((index + 0.5) / profile.length) * width},${height - (value / max) * (height - 2)}`);
@@ -16,18 +17,20 @@ type Props = {
     clock: ClockState;
     profile: number[];
     vehicles: number;
-    closures: number;
+    disruptions: number;
+    waiting: boolean;
     /** Short status of the active disruption scenario, shown inside the controls instead of a separate card. */
     scenario?: { text: string; retry?: () => void; compare: "before" | "after"; onCompare: (mode: "before" | "after") => void } | null;
     onChange: (change: Partial<ClockState>) => void;
+    onScrubbingChange: (scrubbing: boolean) => void;
 };
-export default function TrafficControls({ clock, profile, vehicles, closures, scenario, onChange }: Props) {
+export default function TrafficControls({ clock, profile, vehicles, disruptions, waiting, scenario, onChange, onScrubbingChange }: Props) {
     const [scrubbing, setScrubbing] = useState(false);
     const [minimized, setMinimized] = useState(true);
     const collapsed = minimized;
     const toggleMinimized = () => setMinimized(value => !value);
-    // Click blank space to expand; double-click blank space to minimize.
     const gesture = useMemo(() => createDockGesture(), []);
+    const changeScrubbing = (active: boolean) => { setScrubbing(active); onScrubbingChange(active); };
     const live = clock.rate.id === "live";
     const chooseRate = (id: string) => {
         const rate = CLOCK_RATES.find((item) => item.id === id) ?? CLOCK_RATES[1];
@@ -49,7 +52,7 @@ export default function TrafficControls({ clock, profile, vehicles, closures, sc
         <div className="traffic-clock">
           <strong aria-live="off">{formatClock(clock.minutes)}</strong>
           <span>
-            Typical {clock.day} · {live ? "current Toronto time" : "playback"}
+            Typical {clock.day} · {waiting ? "playback held" : !clock.playing ? "paused" : live ? "current Toronto time" : "playback"}
           </span>
         </div>
         <SimulationDatePicker value={clock.date} onChange={chooseDate} dismissKey={String(collapsed)} />
@@ -63,13 +66,13 @@ export default function TrafficControls({ clock, profile, vehicles, closures, sc
       {scenario ? <SlidingControl className="traffic-segmented traffic-compare" label="Compare with normal traffic" value={scenario.compare}>
         {(["before", "after"] as const).map((mode) => <button key={mode} type="button" aria-pressed={scenario.compare === mode} onClick={() => scenario.onCompare(mode)}>{mode === "before" ? "Before" : "After"}</button>)}
       </SlidingControl> : null}
-      <p className="traffic-estimate">Estimated traffic · ≈ {Math.round(vehicles).toLocaleString()} vehicles on roads{closures ? ` · ${closures} full ${closures === 1 ? "closure" : "closures"} applied` : ""}{scenario ? <> · {scenario.text}{scenario.retry ? <> <button type="button" className="traffic-estimate-retry" onClick={scenario.retry}>Retry</button></> : null}</> : null}</p>
+      <p className="traffic-estimate">Estimated traffic · ≈ {Math.round(vehicles).toLocaleString()} vehicles on roads{disruptions ? ` · ${disruptions} active ${disruptions === 1 ? "disruption" : "disruptions"}` : ""}{scenario ? <> · {scenario.text}{scenario.retry ? <> <button type="button" className="traffic-estimate-retry" onClick={scenario.retry}>Retry</button></> : null}</> : null}</p>
       <div className="traffic-timeline" data-scrubbing={scrubbing}>
         <div className="traffic-time-indicator-track" aria-hidden="true"><span className="traffic-time-indicator" style={{ left: `${Math.floor(clock.minutes) / (MINUTES_PER_DAY - 1) * 100}%` }} /></div>
         <svg className="traffic-profile" viewBox="0 0 960 34" preserveAspectRatio="none" aria-hidden="true">
           <path d={profilePath(profile, 960, 34)}/>
         </svg>
-        <input type="range" min={0} max={MINUTES_PER_DAY - 1} step={1} value={Math.floor(clock.minutes)} aria-label="Time of day" aria-valuetext={formatClock(clock.minutes)} onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); setScrubbing(true); }} onPointerUp={() => setScrubbing(false)} onPointerCancel={() => setScrubbing(false)} onLostPointerCapture={() => setScrubbing(false)} onBlur={() => setScrubbing(false)} onChange={(event) => onChange({ minutes: Number(event.target.value), rate: live ? CLOCK_RATES[1] : clock.rate })}/>
+        <input type="range" min={0} max={MINUTES_PER_DAY - 1} step={1} value={Math.floor(clock.minutes)} aria-label="Time of day" aria-valuetext={formatClock(clock.minutes)} onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); changeScrubbing(true); }} onPointerUp={() => changeScrubbing(false)} onPointerCancel={() => changeScrubbing(false)} onLostPointerCapture={() => changeScrubbing(false)} onKeyDown={event => { if (TIME_KEYS.has(event.key)) changeScrubbing(true); }} onKeyUp={event => { if (TIME_KEYS.has(event.key)) changeScrubbing(false); }} onBlur={() => changeScrubbing(false)} onChange={(event) => onChange({ minutes: Number(event.target.value), rate: live ? CLOCK_RATES[1] : clock.rate })}/>
         <div className="traffic-ticks" aria-hidden="true">
           {TICKS.map((minute) => <span key={minute}>{minute === 1440 ? "12 AM" : formatClock(minute).replace(":00", "")}</span>)}
         </div>

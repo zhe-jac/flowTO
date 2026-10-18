@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import type { Layer, PickingInfo } from "@deck.gl/core";
 import { PathStyleExtension } from "@deck.gl/extensions";
 import { PathLayer } from "@deck.gl/layers";
@@ -8,22 +8,23 @@ import type { Map as MapLibreMap } from "maplibre-gl";
 import type { WeatherRates } from "@/lib/weather";
 import type { Disruption } from "@/lib/disruptions";
 import type { DisruptionMap } from "@/lib/disruption-map";
-import { advanceClock, initialTrafficClock, type ClockState } from "@/lib/traffic/clock";
+import { advancePlayback, changePlayback, type ClockState } from "@/lib/traffic/clock";
 import { simulatorLight, type SimulatorLight } from "@/lib/daylight";
 import { CLASS_WIDTHS, congestionColor } from "@/lib/traffic/colors";
 import { closedRoadIds } from "@/lib/traffic/disruptions";
 import { continuousPulseOffset, PULSE_SPACING } from "@/lib/traffic/flow-motion";
 import { createTrafficViewport } from "@/lib/traffic/viewport";
-import { congestionForState, directionState, discreteLevel, profileShare } from "@/lib/traffic/model";
+import { congestionForState, discreteLevel, profileShare } from "@/lib/traffic/model";
 import type { DayType, TrafficData, TrafficSegment } from "@/lib/traffic/types";
 import { FlowPathLayer } from "./flow-path-layer";
 import { useWorkspaceLayout, WorkspaceNotice } from "../workspace-layout";
 import RoadPanel from "./road-panel";
 import TrafficControls from "./traffic-controls";
 import { impactPriority, impactedState } from "@/lib/traffic/rerouting";
-import { disruptionStrength, disruptionWindow, splitPath, type DisruptionPlacement } from "@/lib/traffic/scenario-timing";
+import { disruptionStrength, disruptionWindow, type DisruptionPlacement } from "@/lib/traffic/scenario-timing";
 import { formatClock } from "@/lib/traffic/model";
-import { tweenValue, retargetTween, COLOUR_TRANSITION_MS, HIGHLIGHT_TRANSITION_MS, type VisualTween } from "@/lib/traffic/visual-transition";
+import { tweenValue, retargetTween, TimelineTransitions, COLOUR_TRANSITION_MS, HIGHLIGHT_TRANSITION_MS, type VisualTween } from "@/lib/traffic/visual-transition";
+import { worsenedTraffic } from "@/lib/traffic/traffic-emphasis";
 import { comparisonImpacts } from "@/lib/traffic/comparison";
 import { enrichTrafficData, suppressedVenues } from "@/lib/traffic/activity";
 import { useRerouting } from "./use-rerouting";
@@ -37,8 +38,6 @@ const TILTED_DEPTH = { depthCompare: "less-equal", depthWriteEnabled: false } as
 const OCCLUDED_DEPTH = { depthCompare: "greater", depthWriteEnabled: false } as const;
 const OFFSET_EXTENSION = new PathStyleExtension({ offset: true });
 
-/** Short pieces preserve the highlighted road geometry. */
-const WAVE_PIECE_M = 2;
 const HIGHLIGHT_WIDTH = 1.22;
 /** Highlighted roads are drawn at least as wide as an arterial, so small streets do not stay thin. */
 const HIGHLIGHT_MIN_BASE = 7;
@@ -74,6 +73,9 @@ type Props = {
     onPresentTimeChange: (current: boolean) => void;
     buildingFade: BuildingFadeController | null;
     onChatContext: (context: ChatTrafficContext) => void;
+    clockRef: RefObject<ClockState>;
+    placedAtRef: RefObject<Map<string, DisruptionPlacement>>;
+    onClockChange: (clock: ClockState) => void;
 };
 function buildFlows(segments: TrafficSegment[]) {
     const flows: Flow[] = [];
@@ -88,13 +90,16 @@ function buildFlows(segments: TrafficSegment[]) {
     });
     return flows;
 }
-export default function TrafficOverlay({ map, renderer, items, interacting, onLightChange, onPresentTimeChange, buildingFade, weather, onChatContext }: Props) {
+export default function TrafficOverlay({ map, renderer, items, interacting, onLightChange, onPresentTimeChange, buildingFade, weather, onChatContext, clockRef, placedAtRef, onClockChange }: Props) {
     const { panel, setPanel } = useWorkspaceLayout();
     const [data, setData] = useState<TrafficData | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [retry, setRetry] = useState(0);
     const [selected, setSelected] = useState<number | null>(null);
-    const [snapshot, setSnapshot] = useState<Snapshot>(() => ({ clock: initialTrafficClock(window.location.search), vehicles: 0 }));
+    const [playbackNotice, setPlaybackNotice] = useState<string | null>(null);
+    const [snapshot, setSnapshot] = useState<Snapshot>(() => ({ clock: clockRef.current, vehicles: 0 }));
+
+    useEffect(() => { onClockChange(snapshot.clock); }, [snapshot.clock, onClockChange]);
 
     useEffect(() => { onPresentTimeChange(snapshot.clock.rate.id === "live"); }, [snapshot.clock.rate.id, onPresentTimeChange]);
 
@@ -103,17 +108,28 @@ export default function TrafficOverlay({ map, renderer, items, interacting, onLi
     const lightKey = `${light.phase}:${light.daylight}`;
     // eslint-disable-next-line react-hooks/exhaustive-deps -- lightKey captures every field of light.
     useEffect(() => { onLightChange(light); }, [lightKey, onLightChange]);
-    const clockRef = useRef(snapshot.clock);
+    const timelineRef = useRef<TimelineTransitions | null>(null);
+    timelineRef.current ??= new TimelineTransitions();
+    const timelineRevision = timelineRef.current.revision;
     const selectedRef = useRef<number | null>(null);
     const redrawRef = useRef<() => void>(() => { });
     const closed = useMemo(() => closedRoadIds(items), [items]);
-    const placedAtRef = useRef(new Map<string, DisruptionPlacement>());
-    for (const item of items) if (!placedAtRef.current.has(item.id)) placedAtRef.current.set(item.id, { date: clockRef.current.date, minutes: Math.floor(clockRef.current.minutes) });
-    for (const id of [...placedAtRef.current.keys()]) if (!items.some((item) => item.id === id)) placedAtRef.current.delete(id);
     const [compare, setCompare] = useState<"before" | "after">("after");
     const strengths = items.map((item) => disruptionStrength(item, placedAtRef.current.get(item.id) ?? snapshot.clock.minutes, snapshot.clock.minutes, snapshot.clock.date));
     const nextStart = items.map((item, i) => strengths[i] > 0 ? null : disruptionWindow(item, placedAtRef.current.get(item.id) ?? 0, snapshot.clock.date).start).filter((start): start is number => start !== null && start > snapshot.clock.minutes).sort((a, b) => a - b)[0] ?? null;
     const rerouting = useRerouting(items, snapshot.clock.day, snapshot.clock.minutes, weather, snapshot.clock.date, placedAtRef.current);
+    const waiting = rerouting.loading || !!rerouting.error || interacting;
+    useLayoutEffect(() => {
+        if (!waiting || !clockRef.current.playing) return;
+        clockRef.current = { ...clockRef.current, playing: false };
+        setSnapshot(previous => ({ ...previous, clock: clockRef.current }));
+    }, [waiting, clockRef]);
+    useEffect(() => { setPlaybackNotice(null); }, [rerouting.loading, rerouting.error, interacting]);
+    useEffect(() => {
+        if (!playbackNotice) return;
+        const timer = setTimeout(() => setPlaybackNotice(null), 6000);
+        return () => clearTimeout(timer);
+    }, [playbackNotice]);
     const impacts = rerouting.plan?.impacts;
     const impactKey = useMemo(() => rerouting.plan?.simulation ? `${rerouting.plan.simulation.runKey}:${rerouting.plan.simulation.minute}` : JSON.stringify(rerouting.plan ?? {}), [rerouting.plan]);
     const displayed = comparisonImpacts(rerouting.plan, items, placedAtRef.current, snapshot.clock.minutes, compare, snapshot.clock.date);
@@ -123,15 +139,15 @@ export default function TrafficOverlay({ map, renderer, items, interacting, onLi
         onChatContext(JSON.parse(chatKey));
     }, [chatKey, onChatContext]);
     const closureKey = [...closed].sort().join(",") + impactKey;
-    const latestRef = useRef({ closed, closureKey, interacting, impacts, items, compare, weather, plan: rerouting.plan });
-    useEffect(() => {
-        latestRef.current = { closed, closureKey, interacting, impacts, items, compare, weather, plan: rerouting.plan };
+    const latestRef = useRef({ closed, closureKey, interacting, impacts, items, compare, weather, plan: rerouting.plan, loading: rerouting.loading, waiting, timelineRevision });
+    useLayoutEffect(() => {
+        latestRef.current = { closed, closureKey, interacting, impacts, items, compare, weather, plan: rerouting.plan, loading: rerouting.loading, waiting, timelineRevision };
         if (interacting) {
             selectedRef.current = null;
             setSelected(null);
         }
         redrawRef.current();
-    }, [closed, closureKey, interacting, impacts, items, compare, weather, rerouting.plan]);
+    }, [closed, closureKey, interacting, impacts, items, compare, weather, rerouting.plan, rerouting.loading, waiting, timelineRevision]);
     useEffect(() => {
         selectedRef.current = selected;
         redrawRef.current();
@@ -185,36 +201,13 @@ export default function TrafficOverlay({ map, renderer, items, interacting, onLi
         let visibleClosures: string | null = null;
         let viewDirty = true;
         let detach = () => { };
-        // Highlight the affected area; colour always follows the same effective state as speed and statistics.
-        type Piece = { flow: Flow; path: [number, number][]; fromStartM: number; fromEndM: number };
         const segmentIndex = new Map(segments.map((segment, index) => [segment.id, index]));
-        const endpoint = (p: number[]) => `${p[0].toFixed(5)},${p[1].toFixed(5)}`;
-        const junctions = new Map<string, Set<number>>();
-        segments.forEach((segment, index) => {
-            for (const point of [segment.coords[0], segment.coords.at(-1)!]) {
-                const key = endpoint(point);
-                const neighbours = junctions.get(key) ?? new Set<number>();
-                neighbours.add(index); junctions.set(key, neighbours);
-            }
-        });
         const targetLevels = new Float32Array(flows.length);
-        const junctionColourCache = new Map<string, number>();
-        // Before/After flips quickly so the comparison is obvious; time-driven changes keep the slower blend.
         let lastCompareMode: "before" | "after" | null = null;
-        const pathLength = (path: number[][]) => path.slice(1).reduce((sum, p, i) => sum + Math.hypot((p[0] - path[i][0]) * 80400, (p[1] - path[i][1]) * 111200), 0);
         let effectiveClosed = new Set<string>();
         let closedDirections = new Set<string>();
         let effectiveKey = "";
-        let pieceKey = "";
-        let pieces: Piece[] = [];
-        let boldPieces: Piece[] = [];
-        let plainPieces: Piece[] = [];
-        let visibleBoldPieces: Piece[] = [];
-        let visiblePlainPieces: Piece[] = [];
-        let impactViewport: number[] | null = null;
-        let impactMembership = "";
-        let membershipKey = "";
-        const displayLevel = new Map<number, number>();
+        let trackedFlows = new Set<number>();
         let highlighted = new Set<number>();
         let dim = 0;
         const colourTweens = new Map<number, VisualTween>();
@@ -223,43 +216,28 @@ export default function TrafficOverlay({ map, renderer, items, interacting, onLi
         const visualEmphasis = new Map<number, number>();
         let visualVersion = 0;
         let visualMoving = false;
-        const rebuildPieces = (ids: string[]) => {
-            pieces = [];
-            for (const id of ids) {
-                const index = segmentIndex.get(id);
-                if (index === undefined || effectiveClosed.has(id)) continue;
-                for (const flow of flowsBySegment[index]) {
-                    if (closedDirections.has(`${segments[index].id}:${flow.direction}`)) continue;
-                    const total = pathLength(flow.path);
-                    let travelled = 0;
-                    for (const path of splitPath(flow.path, latestRef.current.plan?.simulation ? 8 : WAVE_PIECE_M)) {
-                        const length = pathLength(path);
-                        const centre = travelled + length / 2;
-                        pieces.push({ flow, path, fromStartM: centre, fromEndM: total - centre });
-                        travelled += length;
-                    }
-                }
-            }
-        };
+        let snapFrame = false;
         const refreshState = () => {
             const { minutes, day, date } = clockRef.current;
-            const { closureKey, items: scenarioItems, impacts: planImpacts, compare: mode, weather } = latestRef.current;
+            const { closureKey, items: scenarioItems, compare: mode, weather } = latestRef.current;
+            const timeline = timelineRef.current!;
+            const immediate = timeline.immediate || preference.matches;
             const strengths = scenarioItems.map((item) => mode === "before" ? 0 : disruptionStrength(item, placedAtRef.current.get(item.id) ?? minutes, minutes, date));
             const activity = { minutes, date, suppressedVenues: suppressedVenues(scenarioItems.filter((_, i) => strengths[i] > 0)) };
-            const activeKey = `${date}|${closureKey}|${mode}|${weather.rainMmPerHour},${weather.snowCmPerHour}|${scenarioItems.map((item, i) => strengths[i] > 0 ? item.id : "").join(",")}`;
+            const activeKey = `${timeline.revision}:${latestRef.current.timelineRevision}:${latestRef.current.loading}:${timeline.immediate}:${timeline.dragging}|${date}|${closureKey}|${mode}|${weather.rainMmPerHour},${weather.snowCmPerHour}|${scenarioItems.map((item, i) => strengths[i] > 0 ? item.id : "").join(",")}`;
             if (day === stateDay && Math.abs(minutes - stateMinutes) < 0.5 && stateClosures === activeKey)
                 return;
+            snapFrame = immediate;
             stateMinutes = minutes;
             stateDay = day;
             stateClosures = activeKey;
-            const effective = comparisonImpacts(latestRef.current.plan, scenarioItems, placedAtRef.current, minutes, mode, date);
+            const baseline = comparisonImpacts(latestRef.current.plan, scenarioItems, placedAtRef.current, minutes, "before", date);
+            const scenario = comparisonImpacts(latestRef.current.plan, scenarioItems, placedAtRef.current, minutes, "after", date);
+            const effective = mode === "before" ? baseline : scenario;
             effectiveClosed = effective.closed;
             closedDirections = new Set(Object.entries(effective.impacts).flatMap(([id, impact]) => impact.statesByDirection?.flatMap((state, i) => state?.capacity === 0 ? [`${id}:${i === 0 ? 1 : -1}`] : []) ?? []));
             effectiveKey = [...effectiveClosed, ...closedDirections].sort().join(",");
 
-            // The affected area is drawn (bold, in normal colours) even before the disruption starts or in "Before" mode,
-            // so comparing only changes colour, never width.
-            const areaImpacts = planImpacts ?? {};
             const impacts = effective.impacts;
             const share = profileShare(data.profiles[day], minutes);
             const segmentStates = segments.map(segment => impactedState(segment, share, day, impacts[segment.id], weather, activity));
@@ -291,78 +269,60 @@ export default function TrafficOverlay({ map, renderer, items, interacting, onLi
                 colorVersion++;
             if (speedsChanged)
                 paramVersion++;
-            // Use the effective buildup state for every displayed congestion colour.
-            const affectedIds = Object.keys(areaImpacts);
-            const drawIds = new Set(affectedIds);
-            for (const id of affectedIds) {
-                const index = segmentIndex.get(id);
-                if (index === undefined) continue;
-                for (const p of [segments[index].coords[0], segments[index].coords.at(-1)!]) {
-                    for (const neighbour of junctions.get(endpoint(p)) ?? []) drawIds.add(segments[neighbour].id);
-                }
-            }
-            const ids = [...drawIds];
-            const nextPieceKey = `${ids.sort().join(",")}|${effectiveKey}`;
-            const scenarioChanged = nextPieceKey !== pieceKey;
-            if (scenarioChanged) {
-                pieceKey = nextPieceKey;
-                rebuildPieces(ids);
-                highlighted = new Set();
-            }
-
-            displayLevel.clear();
-            // Highlights only grow within a scenario, so a road does not flick between bold and thin as the clock moves.
-            const nextHighlights = new Set(highlighted);
-            for (const id of ids) {
-                const index = segmentIndex.get(id);
-                if (index === undefined) continue;
-                const baseline = directionState(segments[index], share, day, weather, activity);
-                for (const flow of flowsBySegment[index]) {
-                    const full = impactedState(segments[index], share, day, areaImpacts[id], weather, activity, flow.direction);
-                    // Affected roads show one whole level along their full length; the change still blends over time.
-                    displayLevel.set(flow.index, discreteLevel(targetLevels[flow.index]));
-                    if (full.level !== baseline.level || full.ratio - baseline.ratio > 0.08 || (areaImpacts[id]?.capacityScale ?? 1) < 1) nextHighlights.add(index);
-                }
-            }
-            highlighted = nextHighlights;
-            const currentIndices = new Set(ids.map(id => segmentIndex.get(id)));
-            for (const index of emphasisTweens.keys()) if (!currentIndices.has(index)) {
-                emphasisTweens.delete(index);
-                visualEmphasis.delete(index);
-            }
-            for (const index of colourTweens.keys()) if (!currentIndices.has(flows[index].segment)) {
-                colourTweens.delete(index);
-                visualLevels.delete(index);
-            }
+            const affectedIds = Object.keys(latestRef.current.plan?.impacts ?? {});
+            const currentFlows = new Set<number>();
+            const nextHighlights = new Set<number>();
             const now = performance.now();
             const comparing = lastCompareMode !== null && lastCompareMode !== mode;
             lastCompareMode = mode;
-            const colourDuration = preference.matches ? 0 : comparing ? COMPARE_TRANSITION_MS : COLOUR_TRANSITION_MS;
-            for (const id of ids) {
+            const colourDuration = immediate ? 0 : comparing ? COMPARE_TRANSITION_MS : COLOUR_TRANSITION_MS;
+            for (const id of affectedIds) {
                 const index = segmentIndex.get(id);
                 if (index === undefined) continue;
-                const baseline = discreteLevel(congestionForState(directionState(segments[index], share, day, weather, activity)));
-                for (const flow of flowsBySegment[index]) colourTweens.set(flow.index, retargetTween(colourTweens.get(flow.index), displayLevel.get(flow.index) ?? baseline, now, colourDuration, baseline));
-                emphasisTweens.set(index, retargetTween(emphasisTweens.get(index), highlighted.has(index) ? 1 : 0, now, preference.matches ? 0 : HIGHLIGHT_TRANSITION_MS, 0));
+                for (const flow of flowsBySegment[index]) {
+                    if (effectiveClosed.has(id) || closedDirections.has(`${id}:${flow.direction}`)) continue;
+                    const before = impactedState(segments[index], share, day, baseline.impacts[id], weather, activity, flow.direction);
+                    const after = impactedState(segments[index], share, day, scenario.impacts[id], weather, activity, flow.direction);
+                    const emphasize = mode === "after" && worsenedTraffic(before, after, !immediate && highlighted.has(flow.index));
+                    if (emphasize) nextHighlights.add(flow.index);
+                    const initial = congestionForState(before);
+                    const target = emphasize ? discreteLevel(targetLevels[flow.index]) : targetLevels[flow.index];
+                    currentFlows.add(flow.index);
+                    colourTweens.set(flow.index, retargetTween(colourTweens.get(flow.index), target, now, colourDuration, initial));
+                    emphasisTweens.set(flow.index, retargetTween(emphasisTweens.get(flow.index), emphasize ? 1 : 0, now, immediate ? 0 : comparing ? COMPARE_TRANSITION_MS : HIGHLIGHT_TRANSITION_MS, 0));
+                }
             }
-            const nextMembershipKey = `${pieceKey}|${[...highlighted].sort((a, b) => a - b).join(",")}`;
-            if (membershipKey !== nextMembershipKey) {
-                membershipKey = nextMembershipKey;
-                boldPieces = pieces.filter((piece) => highlighted.has(piece.flow.segment));
-                plainPieces = pieces.filter((piece) => !highlighted.has(piece.flow.segment));
+            for (const flowIndex of trackedFlows) if (!currentFlows.has(flowIndex)) {
+                const flow = flows[flowIndex];
+                if (effectiveClosed.has(segments[flow.segment].id) || closedDirections.has(`${segments[flow.segment].id}:${flow.direction}`)) continue;
+                const previous = emphasisTweens.get(flow.index);
+                if (immediate || !previous || tweenValue(previous, now) <= 0) continue;
+                currentFlows.add(flow.index);
+                const target = targetLevels[flow.index];
+                colourTweens.set(flow.index, retargetTween(colourTweens.get(flow.index), target, now, colourDuration, target));
+                emphasisTweens.set(flow.index, retargetTween(previous, 0, now, immediate ? 0 : comparing ? COMPARE_TRANSITION_MS : HIGHLIGHT_TRANSITION_MS, 0));
             }
+            highlighted = nextHighlights;
+            for (const index of emphasisTweens.keys()) if (!currentFlows.has(index)) {
+                emphasisTweens.delete(index);
+                visualEmphasis.delete(index);
+                colourTweens.delete(index);
+                visualLevels.delete(index);
+                visualVersion++;
+            }
+            trackedFlows = currentFlows;
+            timeline.settle(latestRef.current.timelineRevision, latestRef.current.loading);
         };
-        /** Highlighting changes emphasis, never the calculated congestion category. */
-        const pieceColor = (piece: Piece, alpha: number): [number, number, number, number] => {
-            const index = piece.flow.segment;
-            const to = visualLevels.get(piece.flow.index) ?? displayLevel.get(piece.flow.index) ?? 0;
-            // Each affected road is one colour end to end; blending into neighbours at junctions left short
-            // blocks mostly the neighbours' colour.
-            const level = to;
-            const emphasis = visualEmphasis.get(index) ?? 0;
-            const normal = congestionColor(level), vivid = congestionColor(level, true);
+        const ribbonWidth = (flow: Flow) => flow.width + (Math.max(flow.width, HIGHLIGHT_MIN_BASE) * HIGHLIGHT_WIDTH - flow.width) * (visualEmphasis.get(flow.index) ?? 0);
+        const ribbonColor = (flow: Flow): [number, number, number, number] => {
+            const offset = flow.index * 4;
+            const emphasis = visualEmphasis.get(flow.index) ?? 0;
+            const level = visualLevels.get(flow.index);
+            const normal = level === undefined ? [flowColors[offset], flowColors[offset + 1], flowColors[offset + 2]] : congestionColor(level);
+            const vivid = congestionColor(level ?? targetLevels[flow.index], true);
             const [r, g, b] = normal.map((channel, i) => channel + (vivid[i] - channel) * emphasis);
-            return [r, g, b, alpha * (highlighted.has(index) ? visualEmphasis.get(index) ?? 0 : 1)];
+            const alpha = flowColors[offset + 3] + (255 - flowColors[offset + 3]) * emphasis;
+            return [r, g, b, alpha * (1 - DIM_STRENGTH * dim * (1 - emphasis))];
         };
         const roadPick = (info: PickingInfo<Flow>) => {
             if (latestRef.current.interacting || map.getCanvas().parentElement?.dataset.disruptionInteraction === "true")
@@ -393,7 +353,7 @@ export default function TrafficOverlay({ map, renderer, items, interacting, onLi
                     return;
                 const seconds = Math.min(0.5, (now - last) / 1000);
                 last = now;
-                clockRef.current = advanceClock(clockRef.current, seconds);
+                clockRef.current = advancePlayback(clockRef.current, seconds, { waiting: latestRef.current.waiting, scrubbing: timelineRef.current!.dragging });
                 if (!preference.matches && clockRef.current.playing)
                     animationTime += Math.min(seconds, 0.1);
                 if (now - lastState >= 250) {
@@ -431,19 +391,6 @@ export default function TrafficOverlay({ map, renderer, items, interacting, onLi
                 const chosen = selectedRef.current;
                 if (chosen !== null && segments[chosen] && !effectiveClosed.has(segments[chosen].id))
                     layers.push(new PathLayer<Flow>({ id: "traffic-selected", ...placement, parameters: depth, data: flowsBySegment[chosen], getPath: (flow) => flow.path, getColor: [79, 139, 177, 90], getWidth: (flow) => flow.width * (flow.twoWay ? 2.3 : 1) + 4, widthUnits: "pixels", widthScale, capRounded: true, jointRounded: true, antialiasing: true }));
-                const flowLayer = (id: string, layerData: Flow[], opacity: number) => new FlowPathLayer<Flow>({
-                    id, ...placement, visible: opacity > 0, opacity, parameters: depth, data: layerData,
-                    getPath: (flow) => flow.path,
-                    getColor: (flow) => { const offset = flow.index * 4; return [flowColors[offset], flowColors[offset + 1], flowColors[offset + 2], flowColors[offset + 3]]; },
-                    getWidth: (flow) => flow.width,
-                    getOffset: (flow) => flow.twoWay ? -0.6 : 0,
-                    getFlowParams: (flow) => [flowSpeeds[flow.index], flowPhases[flow.index]],
-                    time: animationTime, pulseSpacing: PULSE_SPACING, widthUnits: "pixels", widthScale, widthMinPixels: 1.1, widthMaxPixels: 8, capRounded: true, jointRounded: true, antialiasing: true,
-                    pickable: !latestRef.current.interacting && opacity > 0.2, autoHighlight: !latestRef.current.interacting, highlightColor: [224, 243, 255, 45], extensions: [OFFSET_EXTENSION],
-                    transitions: { getColor: preference.matches ? 0 : 650 },
-                    updateTriggers: { getColor: colorVersion, getFlowParams: paramVersion },
-                });
-
                 visualMoving = false;
                 let visualsChanged = false;
                 for (const [index, tween] of colourTweens) {
@@ -459,34 +406,22 @@ export default function TrafficOverlay({ map, renderer, items, interacting, onLi
                     if (now < tween.started + tween.duration) visualMoving = true;
                 }
                 if (visualsChanged) visualVersion++;
-                junctionColourCache.clear();
-                const emphasis = highlighted.size && pieces.length ? 1 : 0;
-                dim += (emphasis - dim) * Math.min(1, seconds * 4);
-                const rest = 1 - DIM_STRENGTH * dim;
-                layers.push(flowLayer("traffic-flow-local", localFlows, localOpacity * rest), flowLayer("traffic-flow-collectors", collectorFlows, collectorOpacity * rest), flowLayer("traffic-flow", mainFlows, rest));
-                const boldWidth = (piece: Piece) => piece.flow.width + (Math.max(piece.flow.width, HIGHLIGHT_MIN_BASE) * HIGHLIGHT_WIDTH - piece.flow.width) * (visualEmphasis.get(piece.flow.segment) ?? 0);
-                const impactLayer = (id: string, data: Piece[], bold: boolean) => new FlowPathLayer<Piece>({
-                    id, ...placement, parameters: depth, data,
-                    getPath: (piece) => piece.path,
-                    getColor: (piece) => pieceColor(piece, 255),
-                    getWidth: (piece) => bold ? boldWidth(piece) : piece.flow.width,
-                    // Keep each direction centred where the normal ribbon is, whatever the drawn width.
-                    getOffset: (piece) => piece.flow.twoWay ? -0.6 * piece.flow.width / (bold ? boldWidth(piece) : piece.flow.width) : 0,
-                    getFlowParams: (piece) => [flowSpeeds[piece.flow.index], flowPhases[piece.flow.index]],
-                    time: animationTime, pulseSpacing: PULSE_SPACING, widthUnits: "pixels", widthScale,
-                    widthMinPixels: 1.1, widthMaxPixels: bold ? 12 : 8, capRounded: false, jointRounded: true, antialiasing: true,
-                    pickable: false, extensions: [OFFSET_EXTENSION],
-                    updateTriggers: { getColor: visualVersion, getFlowParams: paramVersion, getWidth: visualVersion, getOffset: visualVersion },
+                const emphasis = highlighted.size ? 1 : 0;
+                dim = snapFrame || timelineRef.current!.dragging || preference.matches ? emphasis : dim + (emphasis - dim) * Math.min(1, seconds * 4);
+                snapFrame = false;
+                const flowLayer = (id: string, layerData: Flow[], opacity: number) => new FlowPathLayer<Flow>({
+                    id, ...placement, visible: opacity > 0, opacity, parameters: depth, data: layerData,
+                    getPath: (flow) => flow.path,
+                    getColor: ribbonColor,
+                    getWidth: ribbonWidth,
+                    getOffset: flow => flow.twoWay ? -0.6 * flow.width / ribbonWidth(flow) : 0,
+                    getFlowParams: (flow) => [flowSpeeds[flow.index], flowPhases[flow.index]],
+                    time: animationTime, pulseSpacing: PULSE_SPACING, widthUnits: "pixels", widthScale, widthMinPixels: 1.1, widthMaxPixels: 12, capRounded: true, jointRounded: true, antialiasing: true,
+                    pickable: !latestRef.current.interacting && opacity > 0.2, autoHighlight: !latestRef.current.interacting, highlightColor: [224, 243, 255, 45], extensions: [OFFSET_EXTENSION],
+                    updateTriggers: { getColor: [colorVersion, visualVersion, dim], getFlowParams: paramVersion, getWidth: visualVersion, getOffset: visualVersion },
                 });
-                if (impactViewport !== visibleSegments || impactMembership !== membershipKey) {
-                    impactViewport = visibleSegments;
-                    impactMembership = membershipKey;
-                    const visible = new Set(visibleSegments ?? []);
-                    visiblePlainPieces = plainPieces.filter(piece => visible.has(piece.flow.segment));
-                    visibleBoldPieces = boldPieces.filter(piece => visible.has(piece.flow.segment));
-                }
-                if (visiblePlainPieces.length) layers.push(impactLayer("traffic-flow-impact", visiblePlainPieces, false));
-                if (visibleBoldPieces.length) layers.push(impactLayer("traffic-flow-highlight", visibleBoldPieces, true));
+
+                layers.push(flowLayer("traffic-flow-local", localFlows, localOpacity), flowLayer("traffic-flow-collectors", collectorFlows, collectorOpacity), flowLayer("traffic-flow", mainFlows, 1));
                 const fadeOpacity = buildingFade ? buildingFadeStrength(map.getPitch()) : 0;
                 if (fadeOpacity > 0 && fadeExtension) {
                     const throughBuildings = layers.map(layer => layer.clone({ id: `${layer.id}-through-buildings`, ...fadePlacement, parameters: OCCLUDED_DEPTH, opacity: (layer.props.opacity ?? 1) * fadeOpacity, pickable: false, autoHighlight: false, extensions: [...(layer.props.extensions ?? []), fadeExtension] }));
@@ -498,7 +433,7 @@ export default function TrafficOverlay({ map, renderer, items, interacting, onLi
                     const clock = clockRef.current;
                     setSnapshot((previous) => Math.floor(previous.clock.minutes) === Math.floor(clock.minutes) && previous.clock.day === clock.day && previous.clock.date === clock.date && previous.clock.playing === clock.playing && previous.clock.rate.id === clock.rate.id && Math.round(previous.vehicles) === Math.round(vehicles) ? previous : { clock, vehicles });
                 }
-                if (!visualMoving && (preference.matches || !clockRef.current.playing) && Math.abs(dim - (highlighted.size && pieces.length ? 1 : 0)) < 0.01)
+                if (!visualMoving && (preference.matches || !clockRef.current.playing) && Math.abs(dim - (highlighted.size ? 1 : 0)) < 0.01)
                     timer = window.setTimeout(() => tick(performance.now()), 250);
                 else
                     frame = requestAnimationFrame(tick);
@@ -529,17 +464,25 @@ export default function TrafficOverlay({ map, renderer, items, interacting, onLi
         void initialize().catch(() => { if (!disposed)
             setError("Traffic rendering is unavailable. The map and disruption tools are still available."); });
         return () => { disposed = true; cancelAnimationFrame(frame); clearTimeout(timer); redrawRef.current = () => { }; detach(); buildingFade?.setRoads([]); };
-    }, [data, map, renderer, retry, buildingFade, setPanel]);
+    }, [data, map, renderer, retry, buildingFade, setPanel, clockRef, placedAtRef]);
     const updateClock = (change: Partial<ClockState>) => {
-        clockRef.current = { ...clockRef.current, ...change };
+        if (change.minutes !== undefined || change.date !== undefined) timelineRef.current!.seek();
+        const next = changePlayback(clockRef.current, change, { loading: rerouting.loading, editing: interacting, failed: !!rerouting.error });
+        clockRef.current = next.clock;
+        setPlaybackNotice(next.notice);
         setSnapshot((previous) => ({ ...previous, clock: clockRef.current }));
+        redrawRef.current();
+    };
+    const changeScrubbing = (dragging: boolean) => {
+        timelineRef.current!.dragging = dragging;
         redrawRef.current();
     };
     const selectedSegment = data && selected !== null && !interacting && panel === "road" ? data.segments[selected] : null;
     return (<div className="traffic-ui" data-interacting={interacting}>
-      {data ? <TrafficControls clock={snapshot.clock} profile={data.profiles[snapshot.clock.day]} vehicles={snapshot.vehicles} closures={displayed.closed.size} onChange={updateClock} scenario={items.length || rerouting.plan ? { text: [compare === "before" ? "Showing before disruptions" : !rerouting.plan?.simulation && strengths.every((value) => value === 0) && nextStart !== null ? `Disruptions start ${nextStart >= 1440 ? `${shiftSimulationDate(snapshot.clock.date, Math.floor(nextStart / 1440))} at ` : "at "}${formatClock(nextStart)}` : rerouting.plan?.simulation && strengths.every(value => value === 0) && rerouting.plan.simulation.ledger.onNetwork > rerouting.plan.simulation.baselineLedger.onNetwork + 1 ? "Queues clearing" : !rerouting.plan?.simulation && Math.max(...strengths) < 1 ? "Effects building up" : null, rerouting.loading ? "Simulating traffic…" : rerouting.error ?? (rerouting.plan?.warning ? "Local diversion estimate (Gemini unavailable)" : rerouting.plan?.source === "solver" ? "Dynamic traffic estimate" : "Local diversion estimate")].filter(Boolean).join(" · "), retry: rerouting.error || rerouting.plan?.warning ? rerouting.retry : undefined, compare, onCompare: setCompare } : null} /> : null}
+      {data ? <TrafficControls clock={snapshot.clock} waiting={waiting} profile={data.profiles[snapshot.clock.day]} vehicles={snapshot.vehicles} disruptions={compare === "after" ? strengths.filter(value => value > 0).length : 0} onChange={updateClock} onScrubbingChange={changeScrubbing} scenario={items.length || rerouting.plan ? { text: [compare === "before" ? "Showing before disruptions" : !rerouting.plan?.simulation && strengths.every((value) => value === 0) && nextStart !== null ? `Disruptions start ${nextStart >= 1440 ? `${shiftSimulationDate(snapshot.clock.date, Math.floor(nextStart / 1440))} at ` : "at "}${formatClock(nextStart)}` : rerouting.plan?.simulation && strengths.every(value => value === 0) && rerouting.plan.simulation.ledger.onNetwork > rerouting.plan.simulation.baselineLedger.onNetwork + 1 ? "Queues clearing" : !rerouting.plan?.simulation && Math.max(...strengths) < 1 ? "Effects building up" : null, rerouting.loading ? "Simulating traffic…" : rerouting.error ?? (rerouting.plan?.warning ? "Local diversion estimate (Gemini unavailable)" : rerouting.plan?.source === "solver" ? "Dynamic traffic estimate" : "Local diversion estimate")].filter(Boolean).join(" · "), retry: rerouting.error || rerouting.plan?.warning ? rerouting.retry : undefined, compare, onCompare: setCompare } : null} /> : null}
       {selectedSegment && data ? <RoadPanel key={selectedSegment.id} activity={{ minutes: snapshot.clock.minutes, date: snapshot.clock.date, suppressedVenues: compare === "after" ? suppressedVenues(items.filter((_, i) => strengths[i] > 0)) : [] }} weather={weather} segment={selectedSegment} data={data} clock={snapshot.clock} impact={displayed.impacts[selectedSegment.id]} closed={displayed.closed.has(selectedSegment.id)} onClose={() => { setSelected(null); setPanel(null); }}/> : null}
       {!data && !error ? <WorkspaceNotice><p className="traffic-status" role="status">Loading typical traffic…</p></WorkspaceNotice> : null}
+      {playbackNotice ? <WorkspaceNotice><p className="closure-notice" role="status" data-map-ui>{playbackNotice}<button type="button" className="workspace-notice-dismiss" aria-label="Dismiss playback message" onClick={() => setPlaybackNotice(null)}>×</button></p></WorkspaceNotice> : null}
       {error ? <WorkspaceNotice><p className="traffic-status traffic-status-error" role="alert">{error} <button type="button" onClick={() => { setError(null); setRetry((value) => value + 1); }}>Retry</button></p></WorkspaceNotice> : null}
     </div>);
 }

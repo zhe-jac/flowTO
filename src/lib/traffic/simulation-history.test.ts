@@ -49,3 +49,29 @@ test("Reset discards history while removal of a future operation never creates a
   history.reset();
   assert.deepEqual(history.update([], "2026-10-19", 1050, 1020), []);
 });
+
+test("scenario identity remains unchanged when time windows include different future operations", () => {
+  const history = new SimulationHistory();
+  const future = { ...item, id: "future", startsAt: "2026-10-19T19:00", endsAt: "2026-10-19T20:00" };
+  assert.equal(history.update([item, future], "2026-10-19", 750, 720).length, 1);
+  const scenario = history.scenarioKey();
+  assert.equal(history.update([item, future], "2026-10-19", 1080, 1080).length, 2);
+  assert.equal(history.scenarioKey(), scenario);
+  history.update([item, future], "2026-10-19", 750, 720);
+  assert.equal(history.scenarioKey(), scenario);
+  history.update([{ ...item, roadId: "edited" }, future], "2026-10-19", 750, 720);
+  assert.notEqual(history.scenarioKey(), scenario);
+});
+
+test("removing or rescheduling a disruption and resetting invalidate the scenario identity", () => {
+  const history = new SimulationHistory();
+  history.update([item], "2026-10-19", 750, 720);
+  const original = history.scenarioKey();
+  history.update([{ ...item, startsAt: "2026-10-19T12:30", endsAt: "2026-10-19T13:00" }], "2026-10-19", 750, 720);
+  const rescheduled = history.scenarioKey();
+  assert.notEqual(rescheduled, original);
+  history.update([], "2026-10-19", 770, 720);
+  assert.notEqual(history.scenarioKey(), rescheduled);
+  history.reset();
+  assert.equal(history.scenarioKey(), "[]");
+});

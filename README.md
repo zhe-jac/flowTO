@@ -23,8 +23,12 @@ Built for Hack the Valley 2026 (Hack the Valley x School of Cities track). It te
 
 - **Traffic volumes** come from City of Toronto counts (midblock and intersection), merged across years and adjusted to recent levels. Uncounted roads borrow nearby counts on the same street or use typical values for their road type.
 - **Demand context** includes employment hubs and published Blue Jays home games.
-- **The simulation** runs on the server in a Node worker. It keeps track of every vehicle (on the road, queued or still waiting to leave), respects road storage, and updates route costs each simulated minute. The map plays back its results.
+- **The simulation** runs on the server in a Node worker. It keeps track of every vehicle (on the road, queued or still waiting to leave), respects finite lane storage, and updates routing costs every 30 simulated seconds. The map plays back its results.
 - **Gemini** is optional. It turns text into proposed disruptions and explains results, but it doesn't produce the traffic numbers.
+
+Placement and editing pause playback. Pressing Play before processing finishes shows a message. Expired disruptions leave the map while traffic queues continue clearing. Completed simulation windows remain cached for the current scenario, so revisiting calculated times reuses their results until disruptions or weather change.
+
+See [simulation implementation notes](docs/traffic-simulation.md) and the [solver comparison](reports/traffic-solver-v2-check.md) for calculation details and limitations.
 
 ## Getting started
 
@@ -32,14 +36,16 @@ Requirements: Node.js 22+ and pnpm 9 (or `corepack pnpm`).
 
 ```sh
 corepack pnpm install
-cp .env.example .env.local   # then add your keys
-corepack pnpm dev            # http://localhost:3000
+cp .env.example .env.local
+corepack pnpm dev
 ```
 
 | Variable | Needed for |
 |---|---|
 | `NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN` | Mapbox map with 3D buildings (without it, a free MapLibre map is used) |
 | `GEMINI_API_KEY`, `GEMINI_MODEL` | The assistant (server-only; the simulation works without it) |
+
+Add your keys to `.env.local`, then open http://localhost:3000.
 
 The simulation needs a long-running Node server (`pnpm dev` or `pnpm start`), not serverless functions.
 

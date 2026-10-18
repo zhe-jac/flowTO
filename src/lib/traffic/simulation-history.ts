@@ -20,6 +20,8 @@ export class SimulationHistory {
 
   reset() { this.records.clear(); this.current.clear(); this.originals.clear(); }
 
+  scenarioKey() { return JSON.stringify([...this.records.values()]); }
+
   update(items: Disruption[], date: string, minutes: number, anchor: number, placedAt?: ReadonlyMap<string, DisruptionPlacement>): Disruption[] {
     const now = localSimulationStamp(date, minutes);
     for (const item of items) {

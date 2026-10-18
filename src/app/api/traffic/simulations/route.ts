@@ -5,7 +5,8 @@ import { validSimulationDate } from "@/lib/traffic/simulation-date";
 import { validRoadExtent } from "@/lib/road-extent";
 import { trafficData } from "@/lib/traffic/server-data";
 import { prepareSimulation } from "@/lib/traffic/simulation-network";
-import { startSimulation, trafficTopology } from "@/lib/traffic/simulation-jobs";
+import { beginSimulation, cancelSimulation, startSimulation, trafficTopology } from "@/lib/traffic/simulation-jobs";
+import { parseSimulationOwner } from "@/lib/traffic/simulation-queue";
 
 export const runtime = "nodejs";
 export async function POST(request: Request) {
@@ -19,13 +20,26 @@ export async function POST(request: Request) {
     }
     if (new Set(body.items.map((item: Disruption) => item.id)).size !== body.items.length) throw new Error("Disruption identifiers must be unique.");
     const weather = parseWeatherRates(body.weather);
+    const owner = body.clientId === undefined && body.revision === undefined ? undefined : parseSimulationOwner(body);
+    if (owner && !beginSimulation(owner)) throw new Error("Simulation request was superseded.");
     const [data, topology] = await Promise.all([trafficData(), trafficTopology()]);
     const roads = new Map(data.segments.map(road => [road.id, road.coords]));
     if (body.items.some((item: Disruption) => item.kind !== "event" && !validRoadExtent(item, id => roads.get(id)))) throw new Error("Choose a connected road extent.");
-    const job = startSimulation(prepareSimulation(data, { ...body, weather }, topology));
+    const job = startSimulation(prepareSimulation(data, { ...body, weather }, topology), owner);
     return NextResponse.json(job, { status: job.status === "complete" ? 200 : 202, headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Simulation request could not be processed.";
-    return NextResponse.json({ error: message }, { status: message.includes("busy") ? 429 : 400 });
+    return NextResponse.json({ error: message }, { status: message.includes("busy") ? 429 : message.includes("superseded") ? 409 : 400, headers: { "Cache-Control": "no-store", ...(message.includes("busy") ? { "Retry-After": "1" } : {}) } });
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const raw = await request.text();
+    if (raw.length > 1000) throw new Error("Invalid simulation request identifier.");
+    cancelSimulation(parseSimulationOwner(JSON.parse(raw)));
+    return new NextResponse(null, { status: 204, headers: { "Cache-Control": "no-store" } });
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Simulation could not be cancelled." }, { status: 400 });
   }
 }

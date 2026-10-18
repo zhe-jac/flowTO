@@ -51,6 +51,15 @@ export function advanceClock(state: ClockState, seconds: number, now = new Date(
     return { ...state, minutes, date, day: simulationDayType(date) };
 }
 
+export function advancePlayback(state: ClockState, seconds: number, gate: { waiting: boolean; scrubbing: boolean }, now = new Date()): ClockState {
+    return gate.waiting || gate.scrubbing ? state : advanceClock(state, seconds, now);
+}
+
+export function changePlayback(state: ClockState, change: Partial<ClockState>, gate: { loading: boolean; editing: boolean; failed: boolean }) {
+    const notice = change.playing !== true ? null : gate.loading ? "Traffic is still being simulated. Wait for it to finish, then press Play." : gate.editing ? "Finish placing or editing the disruption before starting playback." : gate.failed ? "The traffic simulation failed. Retry it before starting playback." : null;
+    return { clock: { ...state, ...change, ...(notice ? { playing: false } : {}) }, notice };
+}
+
 export function clockOnDate(state: ClockState, date: string): ClockState {
     if (!validSimulationDate(date)) return state;
     return { ...state, date, day: simulationDayType(date), rate: state.rate.id === "live" ? CLOCK_RATES[1] : state.rate };

@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { Disruption } from "../disruptions";
-import { disruptionStrength, disruptionWindow, scaleImpact, splitPath, waveDuration, waveLevel } from "./scenario-timing";
+import type { Disruption, RoadDisruption } from "../disruptions";
+import { disruptionStrength, disruptionWindow, scaleImpact, splitPath, visibleDisruptions, waveDuration, waveLevel } from "./scenario-timing";
+import { disruptionFeatures } from "../disruptions";
+import { SimulationHistory } from "./simulation-history";
 
-const closure = (startsAt = "", endsAt = ""): Disruption => ({ id: "a", kind: "closure", title: "Closure", position: [-79.38, 43.65], startsAt, endsAt, timeZone: "America/Toronto", roadId: "1", restriction: "full-closure" });
+const closure = (startsAt = "", endsAt = ""): RoadDisruption => ({ id: "a", kind: "closure", title: "Closure", position: [-79.38, 43.65], startsAt, endsAt, timeZone: "America/Toronto", roadId: "1", restriction: "full-closure" });
 
 test("unscheduled disruptions start when placed; scheduled ones use their times", () => {
   assert.deepEqual(disruptionWindow(closure(), 780), { start: 780, end: 1440, scheduled: false });
@@ -59,6 +61,42 @@ test("unscheduled closures stay on their placement date when scrubbing across da
   assert.equal(disruptionStrength(closure(), placed, 600, "2026-10-18"), 1);
   assert.equal(disruptionStrength(closure(), placed, 1439, "2026-10-18"), 1);
   assert.equal(disruptionStrength(closure(), placed, 600, "2026-10-19"), 0);
+});
+
+test("all saved disruption kinds disappear at their end and reappear when rewinding", () => {
+  const base = closure("2026-10-18T12:15", "2026-10-18T13:00");
+  const items: Disruption[] = [base, { ...base, id: "works", kind: "construction" }, { ...base, id: "crash", kind: "accident" }, { ...base, id: "venue", kind: "event", attendance: 1000 }];
+  const placed = new Map();
+  const at = (minutes: number) => visibleDisruptions(items, placed, { date: "2026-10-18", minutes });
+  assert.deepEqual(at(734), []);
+  assert.deepEqual(at(735), items);
+  assert.deepEqual(at(779.9), items);
+  assert.deepEqual(at(780), []);
+  assert.deepEqual(disruptionFeatures(at(780), new Map()).features, []);
+  assert.deepEqual(at(750), items);
+  assert.equal(items.length, 4);
+});
+
+test("visual expiry keeps simulation history available for queue recovery", () => {
+  const item = closure("2026-10-18T12:15", "2026-10-18T13:00");
+  const history = new SimulationHistory();
+  history.update([item], "2026-10-18", 735, 720);
+  assert.deepEqual(visibleDisruptions([item], new Map(), { date: "2026-10-18", minutes: 781 }), []);
+  const operations = history.update([item], "2026-10-18", 781, 720);
+  assert.equal(operations.length, 1);
+  assert.equal(operations[0].endsAt, "2026-10-18T13:00");
+});
+
+test("visual expiry follows overnight schedules and original unscheduled placement dates", () => {
+  const overnight = closure("2026-10-18T23:30", "2026-10-19T01:00");
+  const unscheduled = { ...closure(), id: "unscheduled" };
+  const items = [overnight, unscheduled];
+  const placed = new Map([[unscheduled.id, { date: "2026-10-18", minutes: 750 }]]);
+  assert.deepEqual(visibleDisruptions(items, placed, { date: "2026-10-18", minutes: 749 }), []);
+  assert.deepEqual(visibleDisruptions(items, placed, { date: "2026-10-18", minutes: 1439 }), items);
+  assert.deepEqual(visibleDisruptions(items, placed, { date: "2026-10-19", minutes: 30 }), [overnight]);
+  assert.deepEqual(visibleDisruptions(items, placed, { date: "2026-10-19", minutes: 60 }), []);
+  assert.deepEqual(visibleDisruptions(items, placed, { date: "2026-10-18", minutes: 800 }), [unscheduled]);
 });
 
 test("event arrivals still build independently and preserve their direction split", () => {
