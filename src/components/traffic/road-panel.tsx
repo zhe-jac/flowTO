@@ -73,7 +73,7 @@ export default function RoadPanel({ segment, data, clock, closed, impact, weathe
     const y = (ratio: number) => CHART_H - (ratio / maxRatio) * (CHART_H - 4);
     const line = ratios.map((ratio, index) => `${((index + 0.5) / ratios.length) * CHART_W},${y(ratio)}`).join(" L");
     const nowX = (clock.minutes / MINUTES_PER_DAY) * CHART_W;
-    return (<WorkspacePanel name="road"><div className="road-panel-shell" data-map-ui><aside className="road-panel" aria-label={`${segment.name} traffic`}>
+    return (<WorkspacePanel name="road" dismissOnDoubleClick onDismiss={onClose}><div className="road-panel-shell" data-map-ui><aside className="road-panel" aria-label={`${segment.name} traffic`}>
       <header>
         <div>
           <h2>{segment.name}</h2>
