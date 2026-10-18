@@ -11,7 +11,7 @@ export function streetName(value: string): StreetName {
 export function nameScore(query: StreetName, candidate: StreetName) {
   if (query.ramp !== candidate.ramp || query.type && candidate.type && query.type !== candidate.type || query.suffix && query.suffix !== candidate.suffix) return 0;
   if (query.base === candidate.base) return 100;
-  if (Math.min(query.base.length, candidate.base.length) < 5 || Math.abs(query.base.length - candidate.base.length) > 2) return 0;
+  if (Math.min(query.base.length, candidate.base.length) < 4 || Math.abs(query.base.length - candidate.base.length) > 2) return 0;
   const rows = Array.from({ length: query.base.length + 1 }, (_, i) => [i, ...new Array(candidate.base.length).fill(0)]);
   for (let j = 0; j <= candidate.base.length; j++) rows[0][j] = j;
   for (let i = 1; i <= query.base.length; i++) for (let j = 1; j <= candidate.base.length; j++) {

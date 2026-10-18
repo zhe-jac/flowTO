@@ -23,20 +23,23 @@ Built for Hack the Valley 2026 (Hack the Valley x School of Cities track). It te
 
 - **Traffic volumes** come from City of Toronto counts (midblock and intersection), merged across years and adjusted to recent levels. Uncounted roads borrow nearby counts on the same street or use typical values for their road type.
 - **Demand context** includes employment hubs and published Blue Jays home games.
-- **The simulation** runs on the server in a Node worker. It keeps track of every vehicle (on the road, queued or still waiting to leave), respects road storage, and updates route costs each simulated minute. The map plays back its results.
+- **The simulation** runs on the server in a Node worker. It keeps track of every vehicle (on the road, queued or still waiting to leave), respects finite lane storage, and updates routing costs every 30 simulated seconds. The map plays back its results.
 - **Gemini** is optional. It turns text into proposed disruptions and explains results, but it doesn't produce the traffic numbers.
 
-## Results dashboard and saved runs
+Placement and editing pause playback. Pressing Play before processing finishes shows a message. Expired disruptions leave the map while traffic queues continue clearing. Completed simulation windows remain cached for the current scenario, so revisiting calculated times reuses their results until disruptions or weather change.
 
-The **Results** button (left rail, under weather) opens a panel comparing the simulated scenario with a normal day: extra vehicle-hours of delay, the peak number of extra vehicles on the roads, trips not finished by the end of the run, the worst street, a chart of vehicles on the roads over time, and the most affected streets (click one to open it on the map).
+See [simulation implementation notes](docs/traffic-simulation.md) and the [solver comparison](reports/traffic-solver-v2-check.md) for calculation details and limitations.
 
-Runs can be saved to **Tiger Data** (Timescale Postgres) when `TIGER_DATABASE_URL` is set (server-only; see `.env.example`). On first use the app creates:
+## Results and saved runs (Tiger Data)
 
-- `scenario_runs`: each run's name, date, time window, weather, disruptions, model/data versions and headline results.
-- `run_metrics`: a hypertable of minute-by-minute vehicles on the roads and cumulative delay, for the normal day and the scenario.
-- `run_metrics_hourly`: a continuous aggregate of extra vehicles by hour, used to compare saved runs across the day.
+The **Results** button on the left rail compares the scenario with a normal day: extra vehicle-hours of delay, peak extra vehicles, unfinished trips, the worst street, a chart over time and the most affected streets.
 
-Without the variable, the dashboard still works for the current scenario and explains how to enable saving. Plain Postgres also works; it skips the hypertable and continuous aggregate.
+With `TIGER_DATABASE_URL` set, **Save run** stores the run in Tiger Data (Timescale Postgres):
+- `scenario_runs` holds each run's inputs and headline results.
+- `run_metrics` is a hypertable of minute-by-minute baseline vs. scenario metrics.
+- `run_metrics_hourly` is a continuous aggregate that compares saved runs by hour of day.
+
+Without the variable, the dashboard still works; only saving is off.
 
 ## Getting started
 
@@ -44,14 +47,17 @@ Requirements: Node.js 22+ and pnpm 9 (or `corepack pnpm`).
 
 ```sh
 corepack pnpm install
-cp .env.example .env.local   # then add your keys
-corepack pnpm dev            # http://localhost:3000
+cp .env.example .env.local
+corepack pnpm dev
 ```
 
 | Variable | Needed for |
 |---|---|
 | `NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN` | Mapbox map with 3D buildings (without it, a free MapLibre map is used) |
 | `GEMINI_API_KEY`, `GEMINI_MODEL` | The assistant (server-only; the simulation works without it) |
+| `TIGER_DATABASE_URL` | Saving and comparing runs in Tiger Data (server-only, optional) |
+
+Add your keys to `.env.local`, then open http://localhost:3000.
 
 The simulation needs a long-running Node server (`pnpm dev` or `pnpm start`), not serverless functions.
 

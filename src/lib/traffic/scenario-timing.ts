@@ -3,6 +3,7 @@ import type { Impact } from "./rerouting";
 
 export const BUILD_UP_MINUTES = 45;
 export type DisruptionPlacement = number | { date: string; minutes: number };
+export type DisruptionClock = { date: string; minutes: number };
 const calendarMinute = (value: string) => Date.parse(`${value}Z`) / 60000;
 const clockMinutes = (value: string) => {
   const match = value.match(/T(\d{2}):(\d{2})$/);
@@ -29,6 +30,10 @@ export function disruptionStrength(item: Disruption, placedAt: DisruptionPlaceme
   const length = date || end > start ? end - start : end + 1440 - start;
   if (sinceStart < 0 || sinceStart >= length) return 0;
   return item.kind === "event" ? Math.max(0.001, Math.min(1, sinceStart / BUILD_UP_MINUTES)) : 1;
+}
+
+export function visibleDisruptions(items: Disruption[], placedAt: ReadonlyMap<string, DisruptionPlacement>, clock: DisruptionClock) {
+  return items.filter(item => disruptionStrength(item, placedAt.get(item.id) ?? clock.minutes, clock.minutes, clock.date) > 0);
 }
 
 export function scaleImpact(impact: Impact, strength: number): Impact {

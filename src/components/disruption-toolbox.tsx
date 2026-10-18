@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import type { FeatureCollection } from "geojson";
 import { isPointInToronto } from "@/lib/city-boundary";
@@ -21,6 +21,7 @@ import DisruptionScenes from "./disruption-scenes";
 import DisruptionEndpoints from "./disruption-endpoints";
 import { extentDetails } from "@/lib/road-extent";
 import { setBuildingFadeFocus } from "@/lib/building-fade";
+import { visibleDisruptions, type DisruptionClock, type DisruptionPlacement } from "@/lib/traffic/scenario-timing";
 
 
 type Placement = { kind: DisruptionKind; position: Coordinate; point: ScreenPoint; road?: Road };
@@ -30,7 +31,7 @@ const EMPTY: FeatureCollection = { type: "FeatureCollection", features: [] };
 const SOURCES = ["disruption-roads", "disruption-active", "disruption-applied"];
 const LAYERS = ["disruption-road-guides", "disruption-road-targets", ...["applied", "active"].flatMap((kind) => ["halo", "line", "stripes", "ends", "locations"].map((layer) => `disruption-${kind}-${layer}`))];
 
-export default function DisruptionToolbox({ map, items, setItems, onInteractionChange, open, onOpenChange, suspended }: { map: DisruptionMap; items: Disruption[]; setItems: import("react").Dispatch<import("react").SetStateAction<Disruption[]>>; onInteractionChange: (active: boolean) => void; open: boolean; onOpenChange: (open: boolean) => void; suspended: boolean }) {
+export default function DisruptionToolbox({ map, items, setItems, onInteractionChange, open, onOpenChange, suspended, clock, placedAt }: { map: DisruptionMap; items: Disruption[]; setItems: import("react").Dispatch<import("react").SetStateAction<Disruption[]>>; onInteractionChange: (active: boolean) => void; open: boolean; onOpenChange: (open: boolean) => void; suspended: boolean; clock: DisruptionClock; placedAt: ReadonlyMap<string, DisruptionPlacement> }) {
   const { panel, setPanel } = useWorkspaceLayout();
   const toggleRef = useRef<HTMLButtonElement>(null);
   const [loadState, setLoadState] = useState<"idle" | "loading" | "ready" | "error">("idle");
@@ -40,7 +41,12 @@ export default function DisruptionToolbox({ map, items, setItems, onInteractionC
   const [draft, setDraft] = useState<Disruption | null>(null);
   const editing = !!draft && panel === "editor";
   const [modelsReady, setModelsReady] = useState(false);
-  const sceneItems = useMemo(() => [...items.filter((item) => !editing || item.id !== draft?.id), ...(editing && draft ? [draft] : [])], [items, draft, editing]);
+  const visibleIds = JSON.stringify(visibleDisruptions(items, placedAt, clock).map(item => item.id));
+  const activeItems = useMemo(() => {
+    const ids = new Set<string>(JSON.parse(visibleIds));
+    return items.filter(item => ids.has(item.id));
+  }, [items, visibleIds]);
+  const sceneItems = useMemo(() => [...activeItems.filter((item) => !editing || item.id !== draft?.id), ...(editing && draft ? [draft] : [])], [activeItems, draft, editing]);
   const [formError, setFormError] = useState("");
   const [notice, setNotice] = useState("");
   const roadsRef = useRef(new Map<string, Road>());
@@ -61,7 +67,7 @@ export default function DisruptionToolbox({ map, items, setItems, onInteractionC
   }, [draft?.id, setPanel]);
   const needsRoads = items.some(item => item.kind !== "event") || (draft !== null && draft.kind !== "event");
 
-  useEffect(() => { onInteractionChange(interacting); }, [interacting, onInteractionChange]);
+  useLayoutEffect(() => { onInteractionChange(interacting); }, [interacting, onInteractionChange]);
 
   useEffect(() => {
     const container = map.getCanvas().parentElement;
@@ -107,8 +113,8 @@ export default function DisruptionToolbox({ map, items, setItems, onInteractionC
 
   useEffect(() => {
     itemsRef.current = items;
-    setDisruptionData(map, "disruption-applied", disruptionFeatures(items.filter(item => !editing || item.id !== draft?.id), roadsRef.current));
-  }, [map, items, draft?.id, loadState, editing]);
+    setDisruptionData(map, "disruption-applied", disruptionFeatures(activeItems.filter(item => !editing || item.id !== draft?.id), roadsRef.current));
+  }, [map, items, activeItems, draft?.id, loadState, editing]);
 
   useEffect(() => {
     setDisruptionData(map, "disruption-active", disruptionFeatures(editing && draft ? [draft] : [], roadsRef.current));
@@ -358,7 +364,7 @@ export default function DisruptionToolbox({ map, items, setItems, onInteractionC
   return (
     <>
       <DisruptionScenes map={map} items={sceneItems} roads={roadsRef.current} onReady={setModelsReady} />
-      <DisruptionMarkers map={map} items={items} draft={editing ? draft : null} modelsReady={modelsReady} placing={!!activeTool || !!ghost} onDrag={(event, item) => startDrag(event, item.kind, item)} onSelect={selectItem} />
+      <DisruptionMarkers map={map} items={activeItems} draft={editing ? draft : null} modelsReady={modelsReady} placing={!!activeTool || !!ghost} onDrag={(event, item) => startDrag(event, item.kind, item)} onSelect={selectItem} />
       {editing && draft.kind !== "event" ? <DisruptionEndpoints map={map} draft={draft} roads={roadsRef.current} onChange={item => { setDraft(item); setFormError(""); }} /> : null}
       <div className="closure-toolbox" data-map-ui>
         <WorkspacePanel name="toolbox" dismissOnDoubleClick><section className="toolbox-panel toolbox-floating-panel" id="disruption-toolbox-panel" aria-label="Disruption toolbox" onKeyDown={event => { if (event.key === "Escape") { event.stopPropagation(); toggleToolbox(); } }}>

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { advanceClock, clockOnDate, CLOCK_RATES, initialTrafficClock, torontoNow, type ClockState } from "./clock";
+import { advanceClock, advancePlayback, changePlayback, clockOnDate, CLOCK_RATES, initialTrafficClock, torontoNow, type ClockState } from "./clock";
 import { dateAtNoon, formatSimulationDate, shiftSimulationDate, simulationCalendar, simulationDayType, simulationMonth, validSimulationDate } from "./simulation-date";
 import { simulatorLight, sunTimes } from "../daylight";
 
@@ -32,6 +32,42 @@ test("playback advances the calendar and traffic day type across midnight, leap 
   assert.equal(multipleDays.minutes, 1);
   const paused = { ...clock, playing: false };
   assert.equal(advanceClock(paused, 1000), paused);
+});
+
+test("waiting for a simulation holds every playback speed without skipping the closure's start", () => {
+  for (const rate of CLOCK_RATES) {
+    const start = { ...clock, date: "2026-10-18", minutes: 735, rate };
+    let held = start;
+    for (let i = 0; i < 40; i++) held = advancePlayback(held, 0.5, { waiting: true, scrubbing: false }, now);
+    assert.equal(held, start);
+    const resumed = advancePlayback(held, 0.5, { waiting: false, scrubbing: false }, now);
+    assert.equal(resumed.minutes, rate.id === "live" ? torontoNow(now).minutes : start.minutes + rate.minutesPerSecond * 0.5);
+  }
+});
+
+test("Play and playback speed controls cannot bypass processing, editing or a failed simulation", () => {
+  const paused = { ...clock, playing: false };
+  for (const gate of [{ loading: true, editing: false, failed: false }, { loading: false, editing: true, failed: false }, { loading: false, editing: false, failed: true }]) {
+    for (const rate of CLOCK_RATES) {
+      const blocked = changePlayback(paused, { playing: true, rate }, gate);
+      assert.equal(blocked.clock.playing, false);
+      assert.equal(blocked.clock.minutes, paused.minutes);
+      assert.ok(blocked.notice);
+    }
+  }
+  const ready = changePlayback(paused, { playing: true }, { loading: false, editing: false, failed: false });
+  assert.equal(ready.clock.playing, true);
+  assert.equal(ready.notice, null);
+});
+
+test("manual seeking remains available while processing and a paused clock stays paused when ready", () => {
+  const paused = { ...clock, playing: false };
+  const sought = changePlayback(paused, { minutes: 750 }, { loading: true, editing: false, failed: false });
+  assert.equal(sought.clock.minutes, 750);
+  assert.equal(sought.clock.playing, false);
+  assert.equal(sought.notice, null);
+  assert.equal(advancePlayback(sought.clock, 10, { waiting: false, scrubbing: false }), sought.clock);
+  assert.equal(advancePlayback(clock, 10, { waiting: false, scrubbing: true }), clock);
 });
 
 test("choosing a date preserves the time and playback state while leaving live mode", () => {

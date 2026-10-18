@@ -19,6 +19,15 @@ test("a directional closure selects only the requested directed simulation edges
   assert.throws(() => prepareSimulation(data([road("a")]), { ...request(1060), items: [{ ...closure, travelDirection: "westbound" }] }), /travel direction/);
 });
 
+test("directed edge bearings follow the actual entry and exit bends in either direction", () => {
+  const bent = road("a", { oneway: 0, coords: [[-79.38, 43.65], [-79.379, 43.65], [-79.379, 43.651]] });
+  const network = prepareSimulation(data([bent]), request(1060));
+  assert.equal(network.edges[0].entryBearing, 0);
+  assert.equal(network.edges[0].exitBearing, 90);
+  assert.equal(network.edges[1].entryBearing, -90);
+  assert.equal(Math.abs(network.edges[1].exitBearing!), 180);
+});
+
 test("persistent junction IDs keep coincident but disconnected roads separate", () => {
   const input = prepareSimulation(data([road("a"), road("b")]), request(1060), { a: ["1", "2"], b: ["3", "4"] });
   assert.notEqual(input.edges[0].from, input.edges[1].from);

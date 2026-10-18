@@ -12,6 +12,9 @@ test("street aliases normalize without conflating ramps, street types or geograp
   for (const [a, b] of [["Gardiner Expressway", "F G Gardiner Xy E"], ["DVP", "Don Valley Parkway"], ["Lakeshore Boulevard", "Lake Shore Blvd W"]]) assert.equal(nameScore(streetName(a), streetName(b)), 100);
   for (const [a, b] of [["Queen", "Queensway"], ["Gardiner", "Gardiner Lakeshore W Ramp"], ["Spadina Ave", "Spadina Rd"], ["Queen St W", "Queen St E"]]) assert.equal(nameScore(streetName(a), streetName(b)), 0);
   assert.ok(nameScore(streetName("Quene Street"), streetName("Queen St W")) > 0);
+  assert.ok(nameScore(streetName("Yong St"), streetName("Yonge St")) > 0);
+  assert.equal(nameScore(streetName("Yong St"), streetName("York St")), 0);
+  assert.equal(nameScore(streetName("Bay St"), streetName("Bath St")), 0);
 });
 
 test("user wording overrides a model's guessed ramp and cross-street variants", () => {
@@ -42,6 +45,27 @@ test("separate road commands retain their own limits and directions", () => {
   assert.equal(second.roadName, "King");
   assert.equal(second.fromStreet, "Bathurst");
   assert.equal(second.travelDirection, "westbound");
+});
+
+test("conjunctions separate road requests without entering their street names", () => {
+  for (const separator of [" and ", " and then ", ", then ", "; ", " & "]) {
+    const text = `close king st from university ave to yong st${separator}close adelaide st from university ave to yonge st`;
+    const king = groundLocationAction({ ...action, roadName: "King St W" }, text, 0);
+    const adelaide = groundLocationAction({ ...action, roadName: "Adelaide St W" }, text, 1);
+    assert.equal(king.toStreet, "yong st", separator);
+    assert.equal(adelaide.toStreet, "yonge st", separator);
+    assert.equal(adelaide.roadName, "adelaide st", separator);
+  }
+});
+
+test("road commands match their model actions even when returned in another order", () => {
+  const text = "close King St between University Ave and Yonge St and add construction on Adelaide St from University Ave to Yonge St";
+  const construction = groundLocationAction({ ...action, kind: "construction", roadName: "Adelaide St W" }, text, 0);
+  const king = groundLocationAction({ ...action, roadName: "King St W" }, text, 1);
+  assert.equal(construction.roadName, "Adelaide St");
+  assert.equal(construction.fromStreet, "University Ave");
+  assert.equal(king.roadName, "King St");
+  assert.equal(king.toStreet, "Yonge St");
 });
 
 test("travel direction follows the digitization of each selected section", () => {

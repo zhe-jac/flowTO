@@ -42,3 +42,23 @@ test("natural road descriptions create one editable multi-segment proposal", asy
   assert.ok(proposal.roadSections!.some(section => section.roadId === proposal.roadId));
   assert.throws(() => chatDisruptions([{ kind: "closure", title: "Unspecified extent", roadName: "Queen", startMinutes: 1020, durationMinutes: 120 }], [], "2026-10-17", streets), /cross-streets/);
 });
+
+test("the two-closure King and Adelaide request resolves independently despite a Yonge typo", async () => {
+  const { placementStreets } = await import("./server-data");
+  const streets = await placementStreets();
+  const sourceText = "close king st from university ave to yong st and close adelaide st from university ave to yonge st";
+  const actions = ["King Street West", "Adelaide Street West"].map((roadName, index) => ({ kind: "closure", title: `${roadName} closure`, roadName, fromStreet: "University Avenue", toStreet: "Yonge Street", startMinutes: 1020 + index * 60, durationMinutes: 120 }));
+  const proposals = chatDisruptions(actions, [], "2026-10-17", streets, { sourceText });
+  assert.equal(proposals.length, 2);
+  assert.match(proposals[0].locationLabel!, /^King St W: University Ave → Yonge St/);
+  assert.match(proposals[1].locationLabel!, /^Adelaide St W: University Ave → Yonge St/);
+  for (const [index, name] of ["King St W", "Adelaide St W"].entries()) {
+    assert.ok(proposals[index].kind !== "event");
+    assert.ok(proposals[index].roadSections!.every(section => streets.roads.get(section.roadId)!.properties.name === name));
+  }
+  const reversed = chatDisruptions([...actions].reverse(), [], "2026-10-17", streets, { sourceText });
+  assert.match(reversed[0].locationLabel!, /^Adelaide St W:/);
+  assert.equal(reversed[0].startsAt, "2026-10-17T18:00");
+  assert.match(reversed[1].locationLabel!, /^King St W:/);
+  assert.equal(reversed[1].startsAt, "2026-10-17T17:00");
+});

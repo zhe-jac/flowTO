@@ -3445,6 +3445,7 @@ button {
   margin-top: 4px;
   color: var(--ui-muted);
   font-size: 9px;
+}
 
 /* Minimized dock panels expand when their blank space is clicked. */
 .traffic-controls-shell[data-minimized="true"] .traffic-controls,
