@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef } from "react";
+import { WorkspacePanel } from "./workspace-layout";
 import GlassSurface from "./glass-surface";
 import DisruptionIcon from "./disruption-icon";
 import SlidingControl from "./sliding-control";
@@ -29,7 +30,6 @@ type Props = {
 
 export default function WeatherMenu({ open, onOpenChange, weather, onChange, mode, reading, status, presentTime, onModeChange, onRefresh }: Props) {
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const panelRef = useRef<HTMLElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const id = useId();
   const active = weather.rain > 0 || weather.snow > 0;
@@ -38,30 +38,17 @@ export default function WeatherMenu({ open, onOpenChange, weather, onChange, mod
   useEffect(() => {
     if (!open) return;
     closeRef.current?.focus({ preventScroll: true });
-    const escape = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      onOpenChange(false);
-      triggerRef.current?.focus();
-    };
-    const outside = (event: PointerEvent) => {
-      const target = event.target as Node | null;
-      if (target && !panelRef.current?.contains(target) && !triggerRef.current?.contains(target)) onOpenChange(false);
-    };
-    document.addEventListener("keydown", escape);
-    document.addEventListener("pointerdown", outside, true);
-    return () => { document.removeEventListener("keydown", escape); document.removeEventListener("pointerdown", outside, true); };
   }, [open, onOpenChange]);
 
   return <div className="weather-menu" data-map-ui>
-    <GlassSurface variant="button"><button ref={triggerRef} type="button" className="toolbox-toggle weather-toggle" aria-label={`Weather settings: ${weatherSummary(weather)}`} aria-expanded={open} aria-controls={open ? id : undefined} title="Weather settings" onClick={() => onOpenChange(!open)}><WeatherIcon kind="weather" />{active ? <span className="weather-active-dot" aria-hidden="true" /> : null}</button></GlassSurface>
-    {open ? <section ref={panelRef} id={id} className="toolbox-panel weather-panel" aria-label="Weather settings">
+    <GlassSurface variant="button"><button ref={triggerRef} type="button" className="toolbox-toggle weather-toggle" data-panel-trigger="weather" aria-label={`Weather settings: ${weatherSummary(weather)}`} aria-expanded={open} aria-controls={open ? id : undefined} title="Weather settings" onClick={() => onOpenChange(!open)}><WeatherIcon kind="weather" />{active ? <span className="weather-active-dot" aria-hidden="true" /> : null}</button></GlassSurface>
+    <WorkspacePanel name="weather"><section id={id} className="toolbox-panel weather-panel" aria-label="Weather settings">
       <div className="toolbox-heading"><div><span className="toolbox-eyebrow">SET THE CONDITIONS</span><h2>Weather</h2></div><button ref={closeRef} className="toolbox-close" type="button" aria-label="Close weather settings" onClick={close}><DisruptionIcon kind="close" /></button></div>
       <SlidingControl className="traffic-segmented weather-mode" label="Weather source" value={mode}>
         <button type="button" aria-pressed={mode === "current"} disabled={!presentTime} onClick={() => onModeChange("current")}>Current Toronto</button>
         <button type="button" aria-pressed={mode === "manual"} onClick={() => onModeChange("manual")}>Manual</button>
       </SlidingControl>
-      {!presentTime ? <p className="weather-note">Select Current time in the bottom bar to sync Toronto weather.</p> : null}
+      {!presentTime ? <p className="weather-note">Select Current time in the top timeline to sync Toronto weather.</p> : null}
       <p className="weather-summary" role="status">{mode === "current" && !reading ? status === "error" ? "Weather unavailable" : "Loading Toronto weather…" : weatherSummary(weather)}</p>
       {mode === "current" ? <div className="weather-current-details">
         {reading ? <><span>Downtown Toronto · {weatherTime.format(new Date(reading.validAt))}</span><span>Rain {rateFormat.format(reading.rainMmPerHour)} mm/h · Snow {rateFormat.format(reading.snowCmPerHour)} cm/h</span></> : null}
@@ -74,6 +61,6 @@ export default function WeatherMenu({ open, onOpenChange, weather, onChange, mod
         <div className="weather-slider-scale" aria-hidden="true"><span>Off</span><span>Heavy</span></div>
       </div>)}
       <button className="weather-clear" type="button" disabled={!active && mode === "manual"} onClick={() => onChange(CLEAR_WEATHER)}>Clear weather</button>
-    </section> : null}
+    </section></WorkspacePanel>
   </div>;
 }

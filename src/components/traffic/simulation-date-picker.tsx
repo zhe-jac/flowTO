@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent, RefObject } from "react";
 import { createPortal } from "react-dom";
+import { useWorkspaceLayout } from "../workspace-layout";
 import { torontoNow } from "@/lib/traffic/clock";
 import { dateAtNoon, formatSimulationDate, shiftSimulationDate, simulationCalendar, simulationDayType, simulationMonth } from "@/lib/traffic/simulation-date";
 
@@ -30,13 +31,17 @@ function Calendar({ value, onChange, onClose, triggerRef, id }: { value: string;
     const panel = panelRef.current;
     const trigger = triggerRef.current;
     if (!panel || !trigger) return;
-    const shell = trigger.closest(".traffic-controls-shell") ?? trigger;
+    const shell = trigger.closest(".workspace-timeline") ?? trigger;
     const place = () => {
       const anchor = trigger.getBoundingClientRect();
       const bar = shell.getBoundingClientRect();
       const rect = panel.getBoundingClientRect();
-      const left = Math.max(12, Math.min(window.innerWidth - rect.width - 12, anchor.left + anchor.width / 2 - rect.width / 2));
-      const top = Math.max(12, bar.top - rect.height - 10);
+      const fitsTimeline = rect.width <= bar.width;
+      const minLeft = fitsTimeline ? Math.max(12, bar.left) : 12;
+      const maxLeft = fitsTimeline ? Math.min(window.innerWidth - rect.width - 12, bar.right - rect.width) : window.innerWidth - rect.width - 12;
+      const left = Math.max(minLeft, Math.min(maxLeft, anchor.left + anchor.width / 2 - rect.width / 2));
+      panel.style.maxHeight = `${Math.max(120, window.innerHeight - bar.bottom - 24)}px`;
+      const top = Math.max(12, bar.bottom + 10);
       setPosition(previous => previous.ready && previous.left === left && previous.top === top ? previous : { left, top, ready: true });
     };
     place();
@@ -108,14 +113,18 @@ function Calendar({ value, onChange, onClose, triggerRef, id }: { value: string;
   </div>, document.body);
 }
 
-export default function SimulationDatePicker({ value, onChange }: { value: string; onChange: (date: string) => void }) {
+export default function SimulationDatePicker({ value, onChange, dismissKey }: { value: string; onChange: (date: string) => void; dismissKey: string }) {
+  const { panel, setPanel } = useWorkspaceLayout();
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const id = useId();
   const close = useCallback((restoreFocus = false) => { setOpen(false); if (restoreFocus) triggerRef.current?.focus({ preventScroll: true }); }, []);
 
+  useEffect(() => setOpen(false), [dismissKey]);
+  useEffect(() => { if (panel) setOpen(false); }, [panel]);
+
   return <>
-    <button ref={triggerRef} type="button" className="simulation-date-trigger" aria-label={`Simulation date: ${formatSimulationDate(value, true)}`} aria-haspopup="dialog" aria-expanded={open} aria-controls={open ? id : undefined} title={formatSimulationDate(value, true)} onClick={() => setOpen(value => !value)}><CalendarIcon /><span>{formatSimulationDate(value)}</span><svg className="simulation-date-chevron" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d={open ? "m4 10 4-4 4 4" : "m4 6 4 4 4-4"} /></svg></button>
+    <button ref={triggerRef} type="button" className="simulation-date-trigger" aria-label={`Simulation date: ${formatSimulationDate(value, true)}`} aria-haspopup="dialog" aria-expanded={open} aria-controls={open ? id : undefined} title={formatSimulationDate(value, true)} onClick={() => { if (!open) setPanel(null); setOpen(value => !value); }}><CalendarIcon /><span>{formatSimulationDate(value)}</span><svg className="simulation-date-chevron" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d={open ? "m4 10 4-4 4 4" : "m4 6 4 4 4-4"} /></svg></button>
     {open ? <Calendar value={value} onChange={onChange} onClose={close} triggerRef={triggerRef} id={id} /> : null}
   </>;
 }

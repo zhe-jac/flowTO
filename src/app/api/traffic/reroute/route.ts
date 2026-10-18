@@ -5,7 +5,6 @@ import { NextResponse } from "next/server";
 import { validateDisruption, type Disruption } from "@/lib/disruptions";
 import { buildPlan, scenariosFor, validateChoices } from "@/lib/traffic/rerouting";
 import type { TrafficData } from "@/lib/traffic/types";
-import { expandRoadDisruptions } from "@/lib/traffic/disruptions";
 import { validRoadExtent } from "@/lib/road-extent";
 
 export const runtime = "nodejs";
@@ -38,12 +37,9 @@ export async function POST(request: Request) {
     const data: TrafficData = await trafficData();
     const roadCoordinates = new Map(data.segments.map(s => [s.id, s.coords]));
     if (items.some(item => item.kind !== "event" && !validRoadExtent(item, id => roadCoordinates.get(id)))) return NextResponse.json({ error: "Choose a continuous road stretch from the available streets." }, { status: 400 });
-    const expanded = expandRoadDisruptions(items);
-    // Overlapping restrictions reduce capacity once, using the strongest restriction.
-    const unique = expanded.filter((item, index) => item.kind === "event" || !expanded.some((other, j) => other.kind !== "event" && other.roadId === item.roadId && (other.restriction === "full-closure" && item.restriction !== "full-closure" || other.restriction === item.restriction && j < index)));
-    const scenarios = scenariosFor(data, unique, day, minutes, weather, date);
+    const scenarios = scenariosFor(data, items, day, minutes, weather, date);
     let plan = buildPlan(scenarios);
-    if (scenarios.length) {
+    if (scenarios.length && scenarios.every(scenario => scenario.item.kind === "event")) {
       try {
         if (!process.env.GEMINI_API_KEY) throw new Error("missing-key");
         const roads = new Map(data.segments.map(s => [s.id, s]));

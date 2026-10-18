@@ -1,22 +1,23 @@
 "use client";
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import GlassSurface from "./glass-surface";
-import DisruptionIcon from "./disruption-icon";
+import { WorkspaceDockPane } from "./workspace-layout";
 import type { Disruption } from "@/lib/disruptions";
-import type { ChatTrafficContext } from "@/lib/traffic/chat";
+import type { ChatTrafficContext, ChatProposal } from "@/lib/traffic/chat";
 import type { WeatherRates } from "@/lib/weather";
 
-type Message = { id: string; role: "user" | "assistant"; content: string; proposals?: Disruption[]; applied?: boolean };
+type Message = { id: string; role: "user" | "assistant"; content: string; proposals?: ChatProposal[]; applied?: boolean };
 const SUGGESTION_SETS = [
-  ["Add a concert at Scotiabank Arena with 15,000 people from 7 PM to 11 PM", "Summarize the traffic changes on the map", "How is traffic around the Financial District?"],
-  ["Add a game at Rogers Centre with 30,000 people from 1 PM to 4 PM", "Which affected roads have the most diverted traffic?", "How does weekday commuting affect North York Centre?"],
+  ["Add a concert at Scotiabank Arena with 15,000 people from 7 PM to 11 PM", "Summarize the traffic changes on the map", "Close Queen Street West from Spadina Avenue to University Avenue from 5 PM to 7 PM"],
+  ["Add a game at Rogers Centre with 30,000 people from 1 PM to 4 PM", "Which affected roads have the most diverted traffic?", "Add construction on King Street West from Bathurst Street to Spadina Avenue from 9 AM to 4 PM"],
   ["Add a concert at RBC Amphitheatre with 12,000 people from 7 PM to 10 PM", "Explain the current disruptions and their likely effects", "How is traffic around Yonge–Eglinton?"],
   ["Add a match at BMO Field with 20,000 people from 6 PM to 9 PM", "Compare baseline and scenario speeds on affected roads", "Are any published Blue Jays games affecting the selected date?"],
 ];
-export default function TrafficChat({ open, onOpenChange, context, items, weather, onApply }: {
-  open: boolean; onOpenChange: (open: boolean) => void; context: ChatTrafficContext | null;
+export default function TrafficChat({ context, items, weather, onApply }: {
+  context: ChatTrafficContext | null;
   items: Disruption[]; weather: WeatherRates; onApply: (items: Disruption[]) => boolean;
 }) {
+  const [open, setOpen] = useState(false);
+  const [history, setHistory] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -35,22 +36,17 @@ export default function TrafficChat({ open, onOpenChange, context, items, weathe
   }, []);
   const request = useRef<AbortController | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const trigger = useRef<HTMLButtonElement>(null);
   const log = useRef<HTMLDivElement>(null);
+  const toggleRef = useRef<HTMLButtonElement>(null);
   useEffect(() => () => request.current?.abort(), []);
-  useEffect(() => { if (open) inputRef.current?.focus(); }, [open]);
-  useEffect(() => {
-    if (!open) return;
-    const escape = (event: KeyboardEvent) => { if (event.key === "Escape") { onOpenChange(false); trigger.current?.focus(); } };
-    document.addEventListener("keydown", escape);
-    return () => document.removeEventListener("keydown", escape);
-  }, [open, onOpenChange]);
-  useEffect(() => { if (log.current) log.current.scrollTop = log.current.scrollHeight; }, [messages, loading, open]);
+  function showConversation() { setOpen(true); }
+  useEffect(() => { if (log.current) log.current.scrollTop = history ? log.current.scrollHeight : 0; }, [messages, loading, open, history]);
   async function send(event: FormEvent) {
     event.preventDefault();
     if (!input.trim() || loading || !context) return;
     const message: Message = { id: crypto.randomUUID(), role: "user", content: input.trim() };
     const next = [...messages, message];
+    showConversation();
     setMessages(next); setInput(""); setError(""); setLoading(true);
     const controller = new AbortController(); request.current = controller;
     const timeout = setTimeout(() => controller.abort(), 35000);
@@ -69,26 +65,27 @@ export default function TrafficChat({ open, onOpenChange, context, items, weathe
   function apply(message: Message) {
     if (!message.proposals?.length || message.applied) return;
     if (message.proposals.some(p => p.startsAt.slice(0, 10) !== context?.date)) { setError("The selected date changed. Ask for a new proposal for this date."); return; }
-    if (!onApply(message.proposals)) { setError("A scenario can contain up to 20 disruptions. Remove some before adding these."); return; }
+    if (!onApply(message.proposals.map(({ locationLabel, ...item }) => item))) { setError("A scenario can contain up to 20 disruptions. Remove some before adding these."); return; }
     setMessages(current => current.map(m => m.id === message.id ? { ...m, applied: true } : m));
     setError("");
   }
-  return <div className="traffic-chat" data-map-ui>
-    <GlassSurface variant="button"><button ref={trigger} className="toolbox-toggle" type="button" aria-label="Traffic assistant" aria-expanded={open} aria-controls="traffic-chat-panel" onClick={() => onOpenChange(!open)}>
-      <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><path d="M20 11.5a8 8 0 0 1-8 8H5l-3 2v-10a9 9 0 0 1 18 0Z"/><path d="M7 10h8M7 14h5"/></svg>
-    </button></GlassSurface>
-    {open ? <GlassSurface variant="panel"><section id="traffic-chat-panel" className="traffic-chat-panel" aria-label="Traffic assistant" onKeyDown={e => { if (e.key === "Escape") { onOpenChange(false); trigger.current?.focus(); } }}>
-      <header className="toolbox-heading"><div><span className="toolbox-eyebrow">EXPLORE A WHAT-IF</span><h2>Traffic assistant</h2></div><button className="toolbox-close" type="button" aria-label="Close traffic assistant" onClick={() => { onOpenChange(false); trigger.current?.focus(); }}><DisruptionIcon kind="close" /></button></header>
-      <p className="traffic-chat-note">Describe an event or ask about the map. Changes are reviewed before applying.</p>
-      <div ref={log} className="traffic-chat-log" role="log" aria-label="Conversation" aria-live="polite" aria-relevant="additions">
-        {!messages.length ? <div className="traffic-chat-examples"><p>What would you like to explore?</p>{suggestions.map(text => <button key={text} type="button" onClick={() => { setInput(text); inputRef.current?.focus(); }}>{text}</button>)}</div> : null}
-        {messages.map(message => <article key={message.id} className="traffic-chat-message" data-role={message.role}><strong>{message.role === "user" ? "You" : "Assistant"}</strong><p>{message.content}</p>
-          {message.proposals?.length ? <div className="traffic-chat-proposals">{message.proposals.map(p => <div key={p.id}><strong>{p.title}</strong><small>{p.startsAt.replace("T", " · ")} → {p.endsAt.replace("T", " · ")} Toronto{p.kind === "event" ? ` · ${p.attendance?.toLocaleString()} attendees` : ` · ${p.restriction.replaceAll("-", " ")}`}</small></div>)}<button type="button" disabled={message.applied} onClick={() => apply(message)}>{message.applied ? "Added to map" : "Apply to map"}</button></div> : null}
+  const visibleMessages = history ? messages : messages.slice(-1);
+  return <WorkspaceDockPane name="assistant"><section id="traffic-chat-panel" className="traffic-chat traffic-chat-panel" data-expanded={open} aria-label="Traffic assistant" onKeyDown={event => {
+    if (event.key !== "Escape") return;
+    event.preventDefault();
+    event.stopPropagation();
+    setOpen(false);
+    toggleRef.current?.focus({ preventScroll: true });
+  }}>
+      <div className="traffic-chat-toolbar"><button ref={toggleRef} type="button" className="traffic-chat-toggle" aria-expanded={open} aria-controls="traffic-chat-log" onClick={() => open ? setOpen(false) : showConversation()}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><path d="M20 11a8 8 0 0 1-8 8H5l-3 2V11a9 9 0 0 1 18 0Z" /><path d="M7 10h8M7 14h5" /></svg>Assistant<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><path d={open ? "m6 9 6 6 6-6" : "m6 15 6-6 6 6"} /></svg></button><div className="traffic-chat-actions">{open && messages.length ? <button type="button" className="traffic-chat-history" aria-expanded={history} aria-controls="traffic-chat-log" onClick={() => setHistory(value => !value)}>{history ? "Latest reply" : `History (${messages.length})`}</button> : null}<span className="traffic-chat-date">{context?.date ?? "Loading context…"}</span></div></div>
+      <div ref={log} id="traffic-chat-log" className="traffic-chat-log" hidden={!open} role="log" aria-label={history ? "Conversation history" : "Latest message"} aria-live={open ? "polite" : "off"} aria-relevant="additions" tabIndex={0}>
+        {!messages.length ? <div className="traffic-chat-examples">{suggestions.map(text => <button key={text} type="button" onClick={() => { setInput(text); inputRef.current?.focus(); }}>{text}</button>)}</div> : null}
+        {visibleMessages.map(message => <article key={message.id} className="traffic-chat-message" data-role={message.role}><strong>{message.role === "user" ? "You" : "Assistant"}</strong><p>{message.content}</p>
+          {message.proposals?.length ? <div className="traffic-chat-proposals">{message.proposals.map(p => <div key={p.id}><strong>{p.title}</strong>{p.locationLabel ? <small>{p.locationLabel}</small> : null}<small>{p.startsAt.replace("T", " · ")} → {p.endsAt.replace("T", " · ")} Toronto{p.kind === "event" ? ` · ${p.attendance?.toLocaleString()} attendees` : ` · ${p.restriction.replaceAll("-", " ")}`}</small></div>)}<button type="button" disabled={message.applied} onClick={() => apply(message)}>{message.applied ? "Added to map" : "Apply to map"}</button></div> : null}
         </article>)}
         {loading ? <p role="status" className="traffic-chat-note">Thinking about your scenario…</p> : null}
       </div>
       {error ? <p role="alert" className="traffic-chat-error">{error}</p> : null}
-      <form onSubmit={send}><label className="traffic-chat-note" htmlFor="traffic-chat-input">{context ? `Selected date: ${context.date} · Toronto time` : "Loading map context…"}</label><textarea id="traffic-chat-input" ref={inputRef} rows={3} maxLength={2500} value={input} onChange={e => setInput(e.target.value)} placeholder="Describe an event, closure, or ask for a summary…" onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); e.currentTarget.form?.requestSubmit(); } }}/><div className="traffic-chat-footer"><small>Illustrative estimates · powered by Gemini</small><button type="submit" disabled={loading || !context || !input.trim()}>Send</button></div></form>
-    </section></GlassSurface> : null}
-  </div>;
+      <form onSubmit={send}><label className="closure-announcement" htmlFor="traffic-chat-input">Describe a traffic scenario in Toronto time</label><div className="traffic-chat-composer"><textarea id="traffic-chat-input" ref={inputRef} rows={1} maxLength={2500} value={input} onChange={e => setInput(e.target.value)} placeholder="Close Queen St W from Spadina to University, 5–7 PM…" onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); e.currentTarget.form?.requestSubmit(); } }}/><button type="submit" aria-label="Send message" disabled={loading || !context || !input.trim()}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m12 19 0-14m-6 6 6-6 6 6" /></svg></button></div><div className="traffic-chat-footer" hidden={!open}><small>Review proposals before applying · Gemini</small><small>Shift + Enter for a new line</small></div></form>
+    </section></WorkspaceDockPane>;
 }

@@ -1,9 +1,9 @@
 "use client";
-import { useLayoutEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { CLOCK_RATES, clockOnDate, torontoNow, type ClockState } from "@/lib/traffic/clock";
 import { formatClock, MINUTES_PER_DAY } from "@/lib/traffic/model";
 import SimulationDatePicker from "./simulation-date-picker";
-import GlassSurface from "../glass-surface";
+import { WorkspaceDockPane } from "../workspace-layout";
 import SlidingControl from "../sliding-control";
 const TICKS = [0, 360, 720, 1080, 1440];
 function profilePath(profile: number[], width: number, height: number) {
@@ -22,32 +22,9 @@ type Props = {
 };
 export default function TrafficControls({ clock, profile, vehicles, closures, scenario, onChange }: Props) {
     const [scrubbing, setScrubbing] = useState(false);
-    const [minimized, setMinimized] = useState(false);
-    const shellRef = useRef<HTMLDivElement>(null);
-    const previousSize = useRef<{ width: number; height: number } | null>(null);
-    const resizeAnimation = useRef<Animation | null>(null);
-    const toggleMinimized = () => {
-        const rect = shellRef.current?.getBoundingClientRect();
-        previousSize.current = rect ? { width: rect.width, height: rect.height } : null;
-        resizeAnimation.current?.cancel();
-        setMinimized(value => !value);
-    };
-    useLayoutEffect(() => {
-        const shell = shellRef.current;
-        const before = previousSize.current;
-        previousSize.current = null;
-        if (!shell || !before || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-        const after = shell.getBoundingClientRect();
-        resizeAnimation.current = shell.animate([
-            { width: `${before.width}px`, height: `${before.height}px` },
-            { width: `${after.width}px`, height: `${after.height}px` },
-        ], { duration: 450, easing: "cubic-bezier(0.22, 1, 0.36, 1)" });
-        if (!minimized) {
-            shell.querySelectorAll(".traffic-segmented, .traffic-estimate, .traffic-timeline, .traffic-clock span").forEach(element => {
-                element.animate([{ opacity: 0, transform: "translateY(6px)" }, { opacity: 1, transform: "translateY(0)" }], { duration: 300, delay: 100, fill: "backwards", easing: "ease-out" });
-            });
-        }
-    }, [minimized]);
+    const [minimized, setMinimized] = useState(true);
+    const collapsed = minimized;
+    const toggleMinimized = () => setMinimized(value => !value);
     const live = clock.rate.id === "live";
     const chooseRate = (id: string) => {
         const rate = CLOCK_RATES.find((item) => item.id === id) ?? CLOCK_RATES[1];
@@ -57,9 +34,9 @@ export default function TrafficControls({ clock, profile, vehicles, closures, sc
         const next = clockOnDate(clock, date);
         onChange({ date: next.date, day: next.day, rate: next.rate });
     };
-    return (<div ref={shellRef} className="traffic-controls-shell" data-map-ui data-minimized={minimized}><GlassSurface variant="panel"><section className="traffic-controls" aria-label="Traffic simulation playback">
-      <button type="button" className="traffic-minimize" aria-expanded={!minimized} aria-label={minimized ? "Expand traffic controls" : "Minimize traffic controls"} title={minimized ? "Expand traffic controls" : "Minimize traffic controls"} onClick={toggleMinimized}>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={minimized ? "m6 15 6-6 6 6" : "m6 9 6 6 6-6"} /></svg>
+    return (<WorkspaceDockPane name="timeline"><div className="traffic-controls-shell" data-map-ui data-minimized={collapsed}><section className="traffic-controls" aria-label="Traffic simulation playback">
+      <button type="button" className="traffic-minimize" aria-expanded={!collapsed} aria-label={collapsed ? "Expand traffic controls" : "Minimize traffic controls"} title={collapsed ? "Expand traffic controls" : "Minimize traffic controls"} onClick={toggleMinimized}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={collapsed ? "m6 9 6 6 6-6" : "m6 15 6-6 6 6"} /></svg>
       </button>
       <div className="traffic-controls-row">
         <button type="button" className="traffic-play" aria-label={clock.playing ? "Pause traffic playback" : "Play traffic playback"} onClick={() => onChange({ playing: !clock.playing })}>
@@ -72,7 +49,7 @@ export default function TrafficControls({ clock, profile, vehicles, closures, sc
             Typical {clock.day} · {live ? "current Toronto time" : "playback"}
           </span>
         </div>
-        <SimulationDatePicker value={clock.date} onChange={chooseDate} />
+        <SimulationDatePicker value={clock.date} onChange={chooseDate} dismissKey={String(collapsed)} />
         </div>
         <SlidingControl className="traffic-segmented" label="Playback speed" value={clock.rate.id}>
           {CLOCK_RATES.map((rate) => (<button key={rate.id} type="button" aria-pressed={clock.rate.id === rate.id} onClick={() => chooseRate(rate.id)}>
@@ -94,5 +71,5 @@ export default function TrafficControls({ clock, profile, vehicles, closures, sc
           {TICKS.map((minute) => <span key={minute}>{minute === 1440 ? "12 AM" : formatClock(minute).replace(":00", "")}</span>)}
         </div>
       </div>
-    </section></GlassSurface></div>);
+    </section></div></WorkspaceDockPane>);
 }

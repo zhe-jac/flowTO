@@ -9,7 +9,9 @@ export function useRerouting(items: Disruption[], day: DayType, minutes: number,
   const [result, setResult] = useState<{ key: string; scenarioKey: string; plan: ReroutingPlan } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [retry, setRetry] = useState(0);
-  const key = JSON.stringify({ items, day, weather, date, minutes: Math.floor(minutes / 60) * 60 });
+  const bucket = Math.floor(minutes / 15) * 15;
+  const latestStart = Math.max(bucket, ...items.map(item => item.startsAt.slice(0, 10) === date ? Number(item.startsAt.slice(11, 13)) * 60 + Number(item.startsAt.slice(14, 16)) : bucket).filter(start => start <= minutes));
+  const key = JSON.stringify({ items, day, weather, date, minutes: latestStart });
   const scenarioKey = JSON.stringify({ items, day, weather, date });
   useEffect(() => {
     setError(null);

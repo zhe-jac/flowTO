@@ -5,8 +5,9 @@ export const HIGHLIGHT_TRANSITION_MS = 3000;
 
 /** Blend only near actual connected endpoints, leaving road interiors intact. */
 export function junctionBlend(own: number, start: number, end: number, fromStartM: number, fromEndM: number) {
+  const radius = Math.max(0.001, Math.min(35, (fromStartM + fromEndM) / 4));
   const weight = (metres: number) => {
-    const t = Math.max(0, Math.min(1, 1 - metres / 35));
+    const t = Math.max(0, Math.min(1, 1 - metres / radius));
     return t * t * (3 - 2 * t);
   };
   const a = weight(fromStartM), b = weight(fromEndM), sum = Math.max(1, a + b);

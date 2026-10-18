@@ -43,3 +43,11 @@ test("all playback speeds use the same five-second wall-clock duration", () => {
     assert.equal(tweenValue(tween, 5000), 3);
   }
 });
+
+test("junction smoothing cannot wash out calculated congestion across a short road", () => {
+  for (const length of [2, 5, 10, 30, 60]) {
+    assert.equal(junctionBlend(3, 0, 0, length / 2, length / 2), 3);
+    assert.equal(junctionBlend(3, 1.5, 0, 0, length), 1.5);
+  }
+  assert.ok(Number.isFinite(junctionBlend(3, 0, 0, 0, 0)));
+});

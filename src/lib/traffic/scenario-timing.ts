@@ -1,42 +1,42 @@
 import type { Disruption } from "../disruptions";
 import type { Impact } from "./rerouting";
 
-/** Simulated minutes for a disruption's effect to build to full strength after it starts. */
 export const BUILD_UP_MINUTES = 45;
-
+export type DisruptionPlacement = number | { date: string; minutes: number };
+const calendarMinute = (value: string) => Date.parse(`${value}Z`) / 60000;
 const clockMinutes = (value: string) => {
   const match = value.match(/T(\d{2}):(\d{2})$/);
   return match ? Number(match[1]) * 60 + Number(match[2]) : null;
 };
 
-/**
- * When a disruption applies on the typical-day clock: its scheduled times when set, otherwise from the simulator time
- * it was placed until the end of the day. Returns minutes after midnight; `end` may be below `start` for overnight.
- */
-export function disruptionWindow(item: Disruption, placedAt: number) {
-  const start = clockMinutes(item.startsAt);
-  const end = clockMinutes(item.endsAt);
-  if (start !== null && end !== null) return { start, end, scheduled: true };
-  return { start: placedAt, end: 1440, scheduled: false };
+export function disruptionWindow(item: Disruption, placedAt: DisruptionPlacement, date?: string) {
+  const start = clockMinutes(item.startsAt), end = clockMinutes(item.endsAt);
+  if (start !== null && end !== null) {
+    if (date) {
+      const midnight = calendarMinute(`${date}T00:00:00`);
+      return { start: calendarMinute(`${item.startsAt}:00`) - midnight, end: calendarMinute(`${item.endsAt}:00`) - midnight, scheduled: true };
+    }
+    return { start, end, scheduled: true };
+  }
+  const offset = typeof placedAt === "number" || !date ? 0 : calendarMinute(`${placedAt.date}T00:00:00`) - calendarMinute(`${date}T00:00:00`);
+  return { start: offset + (typeof placedAt === "number" ? placedAt : placedAt.minutes), end: offset + 1440, scheduled: false };
 }
 
-/** 0 before the disruption starts or after it ends, building from 0 to 1 over BUILD_UP_MINUTES after the start. */
-export function disruptionStrength(item: Disruption, placedAt: number, minutes: number) {
-  const { start, end } = disruptionWindow(item, placedAt);
+export function disruptionStrength(item: Disruption, placedAt: DisruptionPlacement, minutes: number, date?: string) {
+  const { start, end } = disruptionWindow(item, placedAt, date);
   const m = ((minutes % 1440) + 1440) % 1440;
-  const sinceStart = end > start ? m - start : (m - start + 1440) % 1440;
-  const length = end > start ? end - start : end + 1440 - start;
+  const sinceStart = date || end > start ? m - start : (m - start + 1440) % 1440;
+  const length = date || end > start ? end - start : end + 1440 - start;
   if (sinceStart < 0 || sinceStart >= length) return 0;
-  // A tiny floor keeps a just-started disruption active (its closure applies) before congestion has built up.
-  return Math.max(0.001, Math.min(1, sinceStart / BUILD_UP_MINUTES));
+  return item.kind === "event" ? Math.max(0.001, Math.min(1, sinceStart / BUILD_UP_MINUTES)) : 1;
 }
 
-/** Scales a rerouting impact between none (0) and the full plan (1). */
 export function scaleImpact(impact: Impact, strength: number): Impact {
   return {
     addedHourly: impact.addedHourly * strength,
     retained: 1 - (1 - impact.retained) * strength,
     capacityScale: 1 - (1 - impact.capacityScale) * strength,
+    ...(impact.addedByDirection ? { addedByDirection: impact.addedByDirection.map(value => value * strength) as [number, number] } : {}),
   };
 }
 

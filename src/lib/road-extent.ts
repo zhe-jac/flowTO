@@ -6,7 +6,7 @@ export type RoadAnchor = { roadId: string; fraction: number };
 export type RoadSection = { roadId: string; from: number; to: number };
 export const MAX_EXTENT_SECTIONS = 24;
 export const MIN_EXTENT_METRES = 5;
-const MAX_EXTENT_METRES = 3000;
+export const MAX_EXTENT_METRES = 3000;
 const coordinate = (point: number[]): Coordinate => [point[0], point[1]];
 
 export function roadDistance(a: number[], b: number[]) {

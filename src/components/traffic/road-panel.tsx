@@ -5,8 +5,8 @@ import type { ClockState } from "@/lib/traffic/clock";
 import { congestionColor } from "@/lib/traffic/colors";
 import { congestionPosition, directionState, formatClock, LEVELS, MINUTES_PER_DAY, profileShare, travelDirection } from "@/lib/traffic/model";
 import { CLASS_ASSUMPTIONS, type TrafficData, type TrafficSegment } from "@/lib/traffic/types";
-import GlassSurface from "../glass-surface";
-import { impactedState, type Impact } from "@/lib/traffic/rerouting";
+import { WorkspacePanel } from "../workspace-layout";
+import { impactedDirectionStates, type Impact } from "@/lib/traffic/rerouting";
 import type { ActivityContext } from "@/lib/traffic/activity";
 const CHART_W = 260;
 const CHART_H = 64;
@@ -56,7 +56,9 @@ export default function RoadPanel({ segment, data, clock, closed, impact, weathe
 }) {
     const profile = data.profiles[clock.day];
     const share = profileShare(profile, clock.minutes);
-    const state = impactedState(segment, share, clock.day, impact, weather, activity ?? { minutes: clock.minutes, date: clock.date });
+    const movement = impactedDirectionStates(segment, share, clock.day, impact, weather, activity ?? { minutes: clock.minutes, date: clock.date })[0];
+    const state = movement.state;
+    const movementLabel = travelDirection(movement.direction === 1 ? segment.coords[0] : segment.coords.at(-1)!, movement.direction === 1 ? segment.coords.at(-1)! : segment.coords[0]);
     const factors = weatherFactors(segment.cls, weather);
     const weatherActive = factors.speed < 1 || factors.capacity < 1;
     const level = LEVELS.find((item) => item.id === state.level)!;
@@ -69,7 +71,7 @@ export default function RoadPanel({ segment, data, clock, closed, impact, weathe
     const y = (ratio: number) => CHART_H - (ratio / maxRatio) * (CHART_H - 4);
     const line = ratios.map((ratio, index) => `${((index + 0.5) / ratios.length) * CHART_W},${y(ratio)}`).join(" L");
     const nowX = (clock.minutes / MINUTES_PER_DAY) * CHART_W;
-    return (<div className="road-panel-shell" data-map-ui><GlassSurface variant="panel"><aside className="road-panel" aria-label={`${segment.name} traffic`}>
+    return (<WorkspacePanel name="road"><div className="road-panel-shell" data-map-ui><aside className="road-panel" aria-label={`${segment.name} traffic`}>
       <header>
         <div>
           <h2>{segment.name}</h2>
@@ -86,13 +88,12 @@ export default function RoadPanel({ segment, data, clock, closed, impact, weathe
       </p>
 
       <dl className="road-panel-stats">
-        <div><dt>Vehicles / hour</dt><dd>{Math.round(state.flow).toLocaleString()}<small>{labels.length > 1 ? " each way" : ` ${labels[0].toLowerCase()}`}</small></dd></div>
+        <div><dt>Vehicles / hour</dt><dd>{Math.round(state.flow).toLocaleString()}<small>{` ${movementLabel.toLowerCase()}${labels.length > 1 ? " · busiest" : ""}`}</small></dd></div>
         <div><dt>Road capacity used</dt><dd>{Math.round(state.ratio * 100)}%</dd></div>
         <div><dt>Estimated speed</dt><dd>{Math.round(state.speedKmh)}<small> km/h</small></dd></div>
         <div><dt>Baseline vehicles / day</dt><dd>{daily.toLocaleString()}<small> total</small></dd></div>
       </dl>
       {impact ? <p className="road-panel-note">Scenario estimate includes diverted traffic and reduced capacity. The daily chart excludes disruptions and uses the same weather.</p> : null}
-      {labels.length > 1 ? <p className="road-panel-note">{labels.join(" and ")} traffic are assumed to split evenly.</p> : null}
 
       <figure className="road-panel-chart">
         <figcaption>Capacity used through a typical {clock.day}{weatherActive ? " · selected weather" : ""}</figcaption>
@@ -106,10 +107,6 @@ export default function RoadPanel({ segment, data, clock, closed, impact, weathe
       </figure>
 
       <p className="road-panel-source">{sourceText(segment)}</p>
-      {segment.activity && (segment.activity.employment > 0 || segment.activity.venues.length > 0) ? <p className="road-panel-source">Includes illustrative local activity adjustments: weekday employment peaks and published Blue Jays game arrival/departure windows. Venue attendance, driving share and influence distances are assumptions, not measured event traffic.</p> : null}
-      <p className="road-panel-source">
-        Assumes {Math.round(state.capacity).toLocaleString()} vehicles/hour capacity per direction and {Math.round(state.freeSpeedKmh)} km/h when uncongested.
-      </p>
       {weatherActive ? <p className="road-panel-source">Weather lowers assumed uncongested speed by {Math.round((1 - factors.speed) * 100)}% and capacity by {Math.round((1 - factors.capacity) * 100)}%. Demand stays unchanged. <a href={WEATHER_TRAFFIC_SOURCE} target="_blank" rel="noreferrer">Research-informed estimate</a>; not calibrated to Toronto weather.</p> : null}
-    </aside></GlassSurface></div>);
+    </aside></div></WorkspacePanel>);
 }

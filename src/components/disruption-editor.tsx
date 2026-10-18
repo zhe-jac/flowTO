@@ -23,25 +23,29 @@ export default function DisruptionEditor({ draft, road, extent, existing, error,
 
   return (
     <section ref={previewRef} className="closure-preview disruption-editor" aria-labelledby="disruption-preview-title" tabIndex={-1} data-map-ui data-kind={draft.kind}>
-      <div className="closure-preview-heading">
-        <span className="closure-tool-icon"><DisruptionIcon kind={draft.kind} /></span>
-        <div><span className="toolbox-eyebrow">{existing ? "EDIT SCENARIO" : "PLACEMENT PREVIEW"}</span><h2 id="disruption-preview-title">{tool.label}</h2></div>
-        <button className="toolbox-close" type="button" aria-label="Dismiss preview" onClick={onCancel}><DisruptionIcon kind="close" /></button>
+      <div className="disruption-editor-header">
+        <div className="closure-preview-heading">
+          <span className="closure-tool-icon"><DisruptionIcon kind={draft.kind} /></span>
+          <div><span className="toolbox-eyebrow">{existing ? "EDIT SCENARIO" : "PLACEMENT PREVIEW"}</span><h2 id="disruption-preview-title">{tool.label}</h2></div>
+          <button className="toolbox-close" type="button" aria-label="Dismiss preview" onClick={onCancel}><DisruptionIcon kind="close" /></button>
+        </div>
       </div>
-      <p className="disruption-location">{road ? `${extent?.names.join(" → ") || road.properties.name} · ${Math.round(extent?.lengthM ?? road.properties.lengthM).toLocaleString()} m affected` : `${draft.position[1].toFixed(5)}, ${draft.position[0].toFixed(5)} · Toronto`}</p>
-      {road ? <p className="closure-direction">{road.properties.direction}</p> : null}
-      {road ? <p id="road-extent-help" className="road-extent-help">Drag a handle onto a street to snap from the last intersection. Earlier blocks stay fixed. Trace back to shorten, or use arrow keys on a focused handle. Save to apply.</p> : null}
       <form onSubmit={(event) => { event.preventDefault(); onSave(); }}>
-        <label className="disruption-field">Name<input required maxLength={80} value={draft.title} onChange={(event) => onChange({ ...draft, title: event.target.value })} /></label>
-        {draft.kind === "event" ? <label className="disruption-field">Expected attendance <span className="disruption-optional">Optional estimate</span><input type="number" min="0" max="1000000" step="1" inputMode="numeric" placeholder="Not specified" value={draft.attendance ?? ""} onChange={(event) => onChange({ ...draft, attendance: event.target.value === "" ? null : event.target.valueAsNumber })} /></label> : (
-          <label className="disruption-field">Road restriction<select value={draft.restriction} onChange={(event) => onChange({ ...draft, restriction: event.target.value as "full-closure" | "lane-reduction" })}><option value="full-closure">Full closure</option><option value="lane-reduction">Lane reduction</option></select></label>
-        )}
-        <fieldset className="disruption-schedule"><legend>Schedule <span className="disruption-optional">Optional · Toronto time</span></legend>
-          <label className="disruption-field">Starts<input type="datetime-local" value={draft.startsAt} onChange={(event) => onChange({ ...draft, startsAt: event.target.value })} /></label>
-          <label className="disruption-field">Ends<input type="datetime-local" min={draft.startsAt || undefined} value={draft.endsAt} onChange={(event) => onChange({ ...draft, endsAt: event.target.value })} /></label>
-        </fieldset>
-        <p className="disruption-schedule-note">{road ? "Traffic estimates apply to whole selected street segments. " : ""}Start and end times follow the playback clock; calendar dates are recorded for planning. Traffic is estimated after saving.</p>
-        {error ? <p className="disruption-form-error" role="alert">{error}</p> : null}
+        <div className="disruption-editor-body">
+          <p className="disruption-location">{road ? `${extent?.names.join(" → ") || road.properties.name} · ${Math.round(extent?.lengthM ?? road.properties.lengthM).toLocaleString()} m affected` : `${draft.position[1].toFixed(5)}, ${draft.position[0].toFixed(5)} · Toronto`}</p>
+          {road ? <p className="closure-direction">{road.properties.direction}</p> : null}
+          {road ? <p id="road-extent-help" className="road-extent-help">Drag a handle onto a street to snap from the last intersection. Earlier blocks stay fixed. Trace back to shorten, or use arrow keys on a focused handle. Save to apply.</p> : null}
+          <label className="disruption-field">Name<input required maxLength={80} value={draft.title} onChange={(event) => onChange({ ...draft, title: event.target.value })} /></label>
+          {draft.kind === "event" ? <label className="disruption-field">Expected attendance <span className="disruption-optional">Optional estimate</span><input type="number" min="0" max="1000000" step="1" inputMode="numeric" placeholder="Not specified" value={draft.attendance ?? ""} onChange={(event) => onChange({ ...draft, attendance: event.target.value === "" ? null : event.target.valueAsNumber })} /></label> : (
+            <label className="disruption-field">Road restriction<span className="disruption-select"><select value={draft.restriction} onChange={(event) => onChange({ ...draft, restriction: event.target.value as "full-closure" | "lane-reduction" })}><option value="full-closure">Full closure</option><option value="lane-reduction">Lane reduction</option></select><DisruptionIcon kind="arrow" /></span></label>
+          )}
+          <fieldset className="disruption-schedule"><legend>Schedule <span className="disruption-optional">Optional · Toronto time</span></legend>
+            <label className="disruption-field">Starts<input type="datetime-local" value={draft.startsAt} onChange={(event) => onChange({ ...draft, startsAt: event.target.value })} /></label>
+            <label className="disruption-field">Ends<input type="datetime-local" min={draft.startsAt || undefined} value={draft.endsAt} onChange={(event) => onChange({ ...draft, endsAt: event.target.value })} /></label>
+          </fieldset>
+          <p className="disruption-schedule-note">{road ? "Traffic estimates apply to whole selected street segments. " : ""}Start and end times follow the simulation date and Toronto clock. Traffic is estimated after saving.</p>
+          {error ? <p className="disruption-form-error" role="alert">{error}</p> : null}
+        </div>
         <div className="closure-preview-actions">
           {existing ? <button className="closure-remove" type="button" onClick={onRemove}>Remove</button> : <button type="button" onClick={onCancel}>Cancel</button>}
           <button className="closure-apply" type="submit">{existing ? "Save changes" : `Add ${draft.kind === "closure" ? "closure" : draft.kind}`}</button>
