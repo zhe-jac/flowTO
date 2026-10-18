@@ -12,10 +12,11 @@
     "test": "tsx --test src/lib/*.test.ts src/lib/traffic/*.test.ts",
     "data:build": "tsx scripts/build-roads.ts",
     "data:boundary": "tsx scripts/build-city-boundary.ts && tsx scripts/build-city-fade.ts",
-    "data:traffic": "tsx scripts/build-traffic.ts",
+    "data:traffic": "tsx scripts/build-traffic.ts && tsx scripts/apply-local-density.ts",
     "data:traffic-topology": "tsx scripts/build-traffic-topology.ts",
     "data:events": "tsx scripts/fetch-venue-events.ts",
-    "data:traffic-geometry": "tsx scripts/refresh-traffic-geometry.ts"
+    "data:traffic-geometry": "tsx scripts/refresh-traffic-geometry.ts",
+    "data:local-density": "tsx scripts/apply-local-density.ts"
   },
   "dependencies": {
     "@deck.gl/core": "9.4.0",

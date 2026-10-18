@@ -2622,6 +2622,26 @@ button {
 
 .workspace-dock :is(button, textarea):focus-visible,
 .workspace-resume:focus-visible {
+
+/* Skip-ahead buttons: jumping forward carries lasting jams over the skipped time. */
+.traffic-skip {
+  display: flex;
+  float: right;
+  gap: 4px;
+  margin: 6px 0 0 8px;
+}
+
+.traffic-skip button {
+  padding: 4px 9px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  background: rgb(255 255 255 / 22%);
+  color: var(--ui-ink);
+  font: 600 11px/1.3 inherit;
+  cursor: pointer;
+}
+
+.traffic-skip button:focus-visible {
   outline: 2px solid var(--ui-accent);
   outline-offset: 2px;
 }
@@ -3084,4 +3104,8 @@ button {
 
 .traffic-chat-proposals > button:not(.traffic-chat-location-choice) + button:not(.traffic-chat-location-choice) {
   margin-left: 8px;
+}
+
+.traffic-controls-shell[data-minimized="true"] .traffic-skip {
+  display: none;
 }

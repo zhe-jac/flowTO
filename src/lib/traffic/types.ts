@@ -22,6 +22,8 @@ export type VolumeSource = {
 } | {
     kind: "class";
     samples?: number;
+    /** Uncounted local streets are scaled by their neighbourhood's population density. */
+    localDensity?: { neighbourhood: string; perKm2: number; factor: number };
 };
 export type TrafficSegment = {
     activity?: import("./activity").RoadActivity;
@@ -49,6 +51,8 @@ export type TrafficData = {
         licence: string;
         /** How older counts were scaled to recent levels. */
         countAdjustment?: { recentFromYear: number; pairedLocations: number; yearFactors: Record<string, number> };
+        /** How uncounted local streets were scaled by neighbourhood density. */
+        localDensity?: { year: number; cityPerKm2: number; elasticity: number; limits: [number, number]; source: string };
     };
     profiles: Record<DayType, number[]>;
     segments: TrafficSegment[];

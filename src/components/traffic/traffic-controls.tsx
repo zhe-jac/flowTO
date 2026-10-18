@@ -60,6 +60,9 @@ export default function TrafficControls({ clock, profile, vehicles, closures, sc
       {scenario ? <SlidingControl className="traffic-segmented traffic-compare" label="Compare with normal traffic" value={scenario.compare}>
         {(["before", "after"] as const).map((mode) => <button key={mode} type="button" aria-pressed={scenario.compare === mode} onClick={() => scenario.onCompare(mode)}>{mode === "before" ? "Before" : "After"}</button>)}
       </SlidingControl> : null}
+      <div className="traffic-skip" role="group" aria-label="Skip ahead">
+        {[30, 60, 180].map((minutes) => <button key={minutes} type="button" onClick={() => onChange({ minutes: (clock.minutes + minutes) % MINUTES_PER_DAY, rate: live ? CLOCK_RATES[1] : clock.rate })} title={`Skip ${minutes < 60 ? `${minutes} minutes` : `${minutes / 60} hour${minutes > 60 ? "s" : ""}`} ahead`}>+{minutes < 60 ? `${minutes} min` : `${minutes / 60} h`}</button>)}
+      </div>
       <p className="traffic-estimate">Estimated traffic · ≈ {Math.round(vehicles).toLocaleString()} vehicles on roads{closures ? ` · ${closures} full ${closures === 1 ? "closure" : "closures"} applied` : ""}{scenario ? <> · {scenario.text}{scenario.retry ? <> <button type="button" className="traffic-estimate-retry" onClick={scenario.retry}>Retry</button></> : null}</> : null}</p>
       <div className="traffic-timeline" data-scrubbing={scrubbing}>
         <div className="traffic-time-indicator-track" aria-hidden="true"><span className="traffic-time-indicator" style={{ left: `${Math.floor(clock.minutes) / (MINUTES_PER_DAY - 1) * 100}%` }} /></div>

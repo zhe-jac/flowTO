@@ -30,7 +30,7 @@ function sourceText(segment: TrafficSegment) {
         case "street":
             return `Estimated from a count ${source.distanceM.toLocaleString()} m along ${segment.name}${source.label ? ` at ${source.label}` : ""}${year(source.date)}.`;
         case "class":
-            return `No count nearby. Uses the typical volume for ${(CLASS_ASSUMPTIONS[segment.cls]?.label ?? segment.cls).toLowerCase()} roads${source.samples ? ` across ${source.samples.toLocaleString()} City counts` : ""}.`;
+            return `No count nearby. Uses the typical volume for ${(CLASS_ASSUMPTIONS[segment.cls]?.label ?? segment.cls).toLowerCase()} roads${source.samples ? ` across ${source.samples.toLocaleString()} City counts` : ""}${source.localDensity ? `, scaled ${Math.round((source.localDensity.factor - 1) * 100) >= 0 ? "+" : ""}${Math.round((source.localDensity.factor - 1) * 100)}% for ${source.localDensity.neighbourhood}'s population density (${source.localDensity.perKm2.toLocaleString()}/km², 2016 Census)` : ""}.`;
     }
 }
 function directions(segment: TrafficSegment) {

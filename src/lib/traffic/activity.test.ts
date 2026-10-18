@@ -40,3 +40,21 @@ test("all day/minute combinations remain finite and bounded", () => {
     assert.ok(Number.isFinite(factor) && factor >= 1 && factor <= 1.7);
   }
 });
+
+test("Maple Leafs home games raise demand near Scotiabank Arena", () => {
+  const game = VENUE_EVENTS.find(event => event.venueId === "scotiabank-arena");
+  assert.ok(game, "schedule includes Leafs home games");
+  const activity = { employment: 0, venues: [{ id: "scotiabank-arena", proximity: 1 }] };
+  assert.ok(activityFactor(activity, "weekday", { date: game.date, minutes: game.minutes - 35 }) > 1);
+});
+
+test("City-listed events add a smaller, local uplift on nearby roads only", () => {
+  const event = VENUE_EVENTS.find(e => e.kind === "community" && e.position);
+  assert.ok(event, "schedule includes City events");
+  const near = enrichTrafficData({ segments: [{ id: "near", coords: [event.position], weekdayDaily: 1, weekendDaily: 1 }] } as unknown as TrafficData).segments[0].activity!;
+  const far = enrichTrafficData({ segments: [{ id: "far", coords: [[event.position![0] + 0.05, event.position![1]]], weekdayDaily: 1, weekendDaily: 1 }] } as unknown as TrafficData).segments[0].activity!;
+  const at = { date: event.date, minutes: event.minutes - 35 };
+  const nearFactor = activityFactor(near, "weekday", at);
+  assert.ok(nearFactor > 1 && nearFactor < 1.45);
+  assert.ok(activityFactor(far, "weekday", at) <= nearFactor);
+});

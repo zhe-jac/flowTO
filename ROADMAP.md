@@ -11,8 +11,8 @@ The original phase checklist below is a reference plan, not an accurate implemen
 
 ### Later: longer-term traffic exploration
 
-- [ ] Add time skipping to explore how longer-lasting traffic jams affect surrounding roads and city traffic over time. This needs congestion persistence/queue behavior; simply accelerating the current playback does not model accumulated jams.
-- [ ] Expand traffic-data coverage beyond the employment hubs and dated venue activity already added, including more sports/concert schedules and better local demand information.
+- [x] Add time skipping to explore how longer-lasting traffic jams affect surrounding roads and city traffic over time. Done: the network simulation (`src/lib/traffic/simulation-*.ts`) tracks queues, storage and recovery over time, and "+30 min / +1 h / +3 h" buttons in the time controls skip ahead.
+- [x] Expand traffic-data coverage. Done: Maple Leafs home games (NHL API) and 955 City of Toronto festivals, parades, celebrations, sports and concerts (Open Data feed) join the Blue Jays schedule (`pnpm data:events`); uncounted local streets are scaled by 2016 neighbourhood population density (`pnpm data:local-density`). Raptors and Toronto FC schedules were not reachable from their public endpoints.
 
 ### Final stage: explicitly deferred by the team
 
