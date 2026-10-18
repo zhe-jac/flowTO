@@ -3085,3 +3085,9 @@ button {
 .traffic-chat-proposals > button:not(.traffic-chat-location-choice) + button:not(.traffic-chat-location-choice) {
   margin-left: 8px;
 }
+
+/* Minimized dock panels expand when their blank space is clicked. */
+.traffic-controls-shell[data-minimized="true"] .traffic-controls,
+.traffic-chat-panel[data-expanded="false"] {
+  cursor: pointer;
+}
