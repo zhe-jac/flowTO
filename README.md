@@ -236,6 +236,18 @@ Schedules describe planned service, not observed operations. Live vehicle positi
 - Add swipe/difference views, exports, and a saved-scenario gallery.
 - Explore automated mitigation suggestions after candidate alternatives can be evaluated consistently.
 
+## Results dashboard and saved runs
+
+The **Results** button (left rail, under weather) opens a panel comparing the simulated scenario with a normal day: extra vehicle-hours of delay, the peak number of extra vehicles on the roads, trips not finished by the end of the run, the worst street, a chart of vehicles on the roads over time, and the most affected streets (click one to open it on the map).
+
+Runs can be saved to **Tiger Data** (Timescale Postgres) when `TIGER_DATABASE_URL` is set (server-only; see `.env.example`). On first use the app creates:
+
+- `scenario_runs`: each run's name, date, time window, weather, disruptions, model/data versions and headline results.
+- `run_metrics`: a hypertable of minute-by-minute vehicles on the roads and cumulative delay, for the normal day and the scenario.
+- `run_metrics_hourly`: a continuous aggregate of extra vehicles by hour, used to compare saved runs across the day.
+
+Without the variable, the dashboard still works for the current scenario and explains how to enable saving. Plain Postgres also works; it skips the hypertable and continuous aggregate.
+
 ## Getting started
 
 Requirements: Node.js 22+ and pnpm 9.15.9. If `pnpm` is not on your path, use `corepack pnpm` as below.

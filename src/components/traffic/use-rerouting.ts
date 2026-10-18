@@ -55,5 +55,7 @@ export function useRerouting(items: Disruption[], _day: DayType, minutes: number
     sampled.simulation!.runKey = key;
     return sampled;
   }, [result, key, clockKey, operations.length]);
-  return { plan, error, loading: operations.length > 0 && result?.key !== key && !error, retry: () => setRetry(n => n + 1) };
+  // The full run (every frame) for the results dashboard; null while a new scenario is simulating.
+  const run = operations.length && result?.key === key ? result.data : null;
+  return { plan, run, error, loading: operations.length > 0 && result?.key !== key && !error, retry: () => setRetry(n => n + 1) };
 }
