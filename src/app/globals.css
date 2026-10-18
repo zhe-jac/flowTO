@@ -3086,6 +3086,367 @@ button {
   margin-left: 8px;
 }
 
+/* Results dashboard: a third rail button under toolbox and weather, opening into the shared side panel. */
+.results-menu {
+  position: absolute;
+  z-index: 3;
+  top: calc(var(--workspace-tools-top, 144px) + 120px);
+  left: 16px;
+  width: 48px;
+  color: var(--ui-ink);
+  pointer-events: auto;
+}
+
+.results-toggle svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.dashboard-panel {
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --viz-grid: color-mix(in srgb, var(--ui-muted) 18%, transparent);
+  width: 100%;
+  max-height: 100%;
+  overflow-y: auto;
+}
+
+:root[data-sim-theme="night"] .dashboard-panel {
+  --series-1: #3987e5;
+  --series-2: #d95926;
+}
+
+.dashboard-note {
+  margin: 10px 0;
+  color: var(--ui-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.dashboard-note code {
+  font-size: 11px;
+}
+
+.dashboard-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ui-accent);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.dashboard-tiles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.dashboard-tiles > div {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--ui-ink) 6%, transparent);
+}
+
+.dashboard-tiles span,
+.dashboard-tiles small {
+  color: var(--ui-muted);
+  font-size: 11px;
+}
+
+.dashboard-tiles strong {
+  color: var(--ui-ink);
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+.dashboard-tiles .dashboard-tile-text {
+  overflow: hidden;
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-section {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--viz-grid);
+}
+
+.dashboard-section h3,
+.dashboard-chart figcaption {
+  margin: 0 0 8px;
+  color: var(--ui-ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.dashboard-chart {
+  margin: 12px 0 0;
+}
+
+.dashboard-legend {
+  display: flex;
+  gap: 14px;
+  margin-bottom: 4px;
+  color: var(--ui-muted);
+  font-size: 11px;
+}
+
+.dashboard-legend span::before {
+  display: inline-block;
+  width: 14px;
+  height: 2px;
+  margin-right: 6px;
+  vertical-align: middle;
+  border-radius: 1px;
+  content: "";
+}
+
+.dashboard-legend [data-series="1"]::before,
+.dashboard-tooltip [data-series="1"]::before { background: var(--series-1); }
+.dashboard-legend [data-series="2"]::before,
+.dashboard-tooltip [data-series="2"]::before { background: var(--series-2); }
+
+.dashboard-chart-plot {
+  position: relative;
+}
+
+.dashboard-chart svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.dashboard-grid { stroke: var(--viz-grid); stroke-width: 1; }
+.dashboard-axis { fill: var(--ui-muted); font-size: 9px; font-variant-numeric: tabular-nums; }
+.dashboard-direct { fill: var(--ui-muted); font-size: 9px; }
+.dashboard-now { stroke: var(--ui-muted); stroke-width: 1; stroke-dasharray: 3 3; }
+.dashboard-crosshair { stroke: var(--ui-ink); stroke-width: 1; opacity: 0.4; }
+.dashboard-line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.dashboard-line[data-series="1"] { stroke: var(--series-1); }
+.dashboard-line[data-series="2"] { stroke: var(--series-2); }
+.dashboard-dot { stroke: var(--glass-panel-tint); stroke-width: 2; }
+.dashboard-dot[data-series="1"] { fill: var(--series-1); }
+.dashboard-dot[data-series="2"] { fill: var(--series-2); }
+
+.dashboard-tooltip {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  background: var(--glass-panel-tint);
+  box-shadow: var(--glass-shadow);
+  color: var(--ui-ink);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+.dashboard-tooltip span::before {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 5px;
+  border-radius: 50%;
+  content: "";
+}
+
+.dashboard-table {
+  margin-top: 6px;
+  color: var(--ui-muted);
+  font-size: 11px;
+}
+
+.dashboard-table summary {
+  cursor: pointer;
+}
+
+.dashboard-table table {
+  width: 100%;
+  margin-top: 6px;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.dashboard-table :is(th, td) {
+  padding: 2px 4px;
+  text-align: right;
+}
+
+.dashboard-table :is(th, td):first-child {
+  text-align: left;
+}
+
+.dashboard-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dashboard-bars :is(button, div) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "name value" "track track";
+  gap: 3px 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ui-ink);
+  font: inherit;
+  text-align: left;
+}
+
+.dashboard-bars button {
+  cursor: pointer;
+}
+
+.dashboard-bars button:hover,
+.dashboard-bars button:focus-visible {
+  background: color-mix(in srgb, var(--ui-ink) 6%, transparent);
+}
+
+.dashboard-bars button:focus-visible {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: 1px;
+}
+
+.dashboard-bar-name {
+  grid-area: name;
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-bar-name small {
+  margin-left: 6px;
+  color: var(--ui-muted);
+  font-size: 11px;
+}
+
+.dashboard-bar-value {
+  grid-area: value;
+  color: var(--ui-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.dashboard-bar-track {
+  grid-area: track;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--viz-grid);
+}
+
+.dashboard-bar {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--series-1);
+}
+
+.dashboard-save {
+  margin-bottom: 8px;
+}
+
+.dashboard-save label {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--ui-muted);
+  font-size: 11px;
+}
+
+.dashboard-save > div {
+  display: flex;
+  gap: 6px;
+}
+
+.dashboard-save input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--ui-muted) 30%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--glass-panel-tint) 70%, transparent);
+  color: var(--ui-ink);
+  font: inherit;
+  font-size: 12px;
+}
+
+.dashboard-save button {
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--ui-accent);
+  color: var(--glass-panel-tint);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.dashboard-save button:disabled {
+  opacity: 0.6;
+}
+
+.dashboard-save :is(input, button):focus-visible {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: 2px;
+}
+
+.dashboard-columns {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 64px;
+}
+
+.dashboard-columns span {
+  display: flex;
+  flex: 1;
+  align-items: flex-end;
+  height: 100%;
+}
+
+.dashboard-columns i {
+  display: block;
+  width: 100%;
+  border-radius: 3px 3px 0 0;
+  background: var(--series-1);
+}
+
+.dashboard-columns-axis {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 4px;
+  color: var(--ui-muted);
+  font-size: 9px;
+}
+
 /* Minimized dock panels expand when their blank space is clicked. */
 .traffic-controls-shell[data-minimized="true"] .traffic-controls,
 .traffic-chat-panel[data-expanded="false"] {
@@ -3095,11 +3456,11 @@ button {
 /* Left tool rail: the buttons sit centred halfway down the screen, and every left-side panel opens in the same place. */
 .workspace-layout {
   /* Number of rail buttons (48 px each, 12 px apart); a branch that adds a button raises this. */
-  --workspace-rail-count: 2;
+  --workspace-rail-count: 3;
   --workspace-tools-top: max(80px, calc(50% - (var(--workspace-rail-count) * 60px - 12px) / 2));
 }
 
-.workspace-layout:is([data-panel="toolbox"], [data-panel="editor"], [data-panel="weather"]) .workspace-side-panel {
+.workspace-layout:is([data-panel="toolbox"], [data-panel="editor"], [data-panel="weather"], [data-panel="results"]) .workspace-side-panel {
   top: calc(var(--workspace-timeline-bottom) + 40px);
 }
 

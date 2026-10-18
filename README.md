@@ -30,6 +30,17 @@ Placement and editing pause playback. Pressing Play before processing finishes s
 
 See [simulation implementation notes](docs/traffic-simulation.md) and the [solver comparison](reports/traffic-solver-v2-check.md) for calculation details and limitations.
 
+## Results and saved runs (Tiger Data)
+
+The **Results** button on the left rail compares the scenario with a normal day: extra vehicle-hours of delay, peak extra vehicles, unfinished trips, the worst street, a chart over time and the most affected streets.
+
+With `TIGER_DATABASE_URL` set, **Save run** stores the run in Tiger Data (Timescale Postgres):
+- `scenario_runs` holds each run's inputs and headline results.
+- `run_metrics` is a hypertable of minute-by-minute baseline vs. scenario metrics.
+- `run_metrics_hourly` is a continuous aggregate that compares saved runs by hour of day.
+
+Without the variable, the dashboard still works; only saving is off.
+
 ## Getting started
 
 Requirements: Node.js 22+ and pnpm 9 (or `corepack pnpm`).
@@ -44,6 +55,7 @@ corepack pnpm dev
 |---|---|
 | `NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN` | Mapbox map with 3D buildings (without it, a free MapLibre map is used) |
 | `GEMINI_API_KEY`, `GEMINI_MODEL` | The assistant (server-only; the simulation works without it) |
+| `TIGER_DATABASE_URL` | Saving and comparing runs in Tiger Data (server-only, optional) |
 
 Add your keys to `.env.local`, then open http://localhost:3000.
 

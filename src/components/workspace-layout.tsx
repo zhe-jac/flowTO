@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import GlassSurface from "./glass-surface";
 import { isBlankTarget } from "@/lib/dock-gestures";
 
-export type WorkspacePanelName = "toolbox" | "weather" | "editor" | "road";
+export type WorkspacePanelName = "toolbox" | "weather" | "editor" | "road" | "results";
 type DockPane = "timeline" | "assistant";
 type WorkspaceContext = {
   panel: WorkspacePanelName | null;

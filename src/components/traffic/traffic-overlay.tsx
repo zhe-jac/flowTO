@@ -19,6 +19,7 @@ import type { DayType, TrafficData, TrafficSegment } from "@/lib/traffic/types";
 import { FlowPathLayer } from "./flow-path-layer";
 import { useWorkspaceLayout, WorkspaceNotice } from "../workspace-layout";
 import RoadPanel from "./road-panel";
+import TrafficDashboard from "./traffic-dashboard";
 import TrafficControls from "./traffic-controls";
 import { impactPriority, impactedState } from "@/lib/traffic/rerouting";
 import { disruptionStrength, disruptionWindow, type DisruptionPlacement } from "@/lib/traffic/scenario-timing";
@@ -62,7 +63,7 @@ type Snapshot = {
     clock: ClockState;
     vehicles: number;
 };
-type TrafficMap = DisruptionMap & Pick<MapboxMap | MapLibreMap, "addControl" | "removeControl" | "getBounds">;
+type TrafficMap = DisruptionMap & Pick<MapboxMap | MapLibreMap, "addControl" | "removeControl" | "getBounds"> & { easeTo(options: { center: [number, number]; zoom: number; duration: number }): unknown };
 type Props = {
     map: TrafficMap;
     renderer: "mapbox" | "maplibre";
@@ -93,6 +94,7 @@ function buildFlows(segments: TrafficSegment[]) {
 export default function TrafficOverlay({ map, renderer, items, interacting, onLightChange, onPresentTimeChange, buildingFade, weather, onChatContext, clockRef, placedAtRef, onClockChange }: Props) {
     const { panel, setPanel } = useWorkspaceLayout();
     const [data, setData] = useState<TrafficData | null>(null);
+    const roadNames = useMemo(() => new Map((data?.segments ?? []).map((segment) => [segment.id, segment.name])), [data]);
     const [error, setError] = useState<string | null>(null);
     const [retry, setRetry] = useState(0);
     const [selected, setSelected] = useState<number | null>(null);
@@ -480,6 +482,14 @@ export default function TrafficOverlay({ map, renderer, items, interacting, onLi
     const selectedSegment = data && selected !== null && !interacting && panel === "road" ? data.segments[selected] : null;
     return (<div className="traffic-ui" data-interacting={interacting}>
       {data ? <TrafficControls clock={snapshot.clock} waiting={waiting} profile={data.profiles[snapshot.clock.day]} vehicles={snapshot.vehicles} disruptions={compare === "after" ? strengths.filter(value => value > 0).length : 0} onChange={updateClock} onScrubbingChange={changeScrubbing} scenario={items.length || rerouting.plan ? { text: [compare === "before" ? "Showing before disruptions" : !rerouting.plan?.simulation && strengths.every((value) => value === 0) && nextStart !== null ? `Disruptions start ${nextStart >= 1440 ? `${shiftSimulationDate(snapshot.clock.date, Math.floor(nextStart / 1440))} at ` : "at "}${formatClock(nextStart)}` : rerouting.plan?.simulation && strengths.every(value => value === 0) && rerouting.plan.simulation.ledger.onNetwork > rerouting.plan.simulation.baselineLedger.onNetwork + 1 ? "Queues clearing" : !rerouting.plan?.simulation && Math.max(...strengths) < 1 ? "Effects building up" : null, rerouting.loading ? "Simulating traffic…" : rerouting.error ?? (rerouting.plan?.warning ? "Local diversion estimate (Gemini unavailable)" : rerouting.plan?.source === "solver" ? "Dynamic traffic estimate" : "Local diversion estimate")].filter(Boolean).join(" · "), retry: rerouting.error || rerouting.plan?.warning ? rerouting.retry : undefined, compare, onCompare: setCompare } : null} /> : null}
+      {data ? <TrafficDashboard run={rerouting.run} loading={rerouting.loading} items={items} date={snapshot.clock.date} minutes={snapshot.clock.minutes} weather={weather} roadNames={roadNames} dataVersion={data.meta.builtAt} onSelectRoad={(id) => {
+        const index = data.segments.findIndex((segment) => segment.id === id);
+        if (index < 0) return;
+        setSelected(index);
+        setPanel("road");
+        const [lon, lat] = data.segments[index].coords[Math.floor(data.segments[index].coords.length / 2)];
+        map.easeTo({ center: [lon, lat], zoom: Math.max(map.getZoom(), 15), duration: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 700 });
+      }} /> : null}
       {selectedSegment && data ? <RoadPanel key={selectedSegment.id} activity={{ minutes: snapshot.clock.minutes, date: snapshot.clock.date, suppressedVenues: compare === "after" ? suppressedVenues(items.filter((_, i) => strengths[i] > 0)) : [] }} weather={weather} segment={selectedSegment} data={data} clock={snapshot.clock} impact={displayed.impacts[selectedSegment.id]} closed={displayed.closed.has(selectedSegment.id)} onClose={() => { setSelected(null); setPanel(null); }}/> : null}
       {!data && !error ? <WorkspaceNotice><p className="traffic-status" role="status">Loading typical traffic…</p></WorkspaceNotice> : null}
       {playbackNotice ? <WorkspaceNotice><p className="closure-notice" role="status" data-map-ui>{playbackNotice}<button type="button" className="workspace-notice-dismiss" aria-label="Dismiss playback message" onClick={() => setPlaybackNotice(null)}>×</button></p></WorkspaceNotice> : null}
