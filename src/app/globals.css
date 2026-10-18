@@ -3091,3 +3091,14 @@ button {
 .traffic-chat-panel[data-expanded="false"] {
   cursor: pointer;
 }
+
+/* Left tool rail: the buttons sit centred halfway down the screen, and every left-side panel opens in the same place. */
+.workspace-layout {
+  /* Number of rail buttons (48 px each, 12 px apart); a branch that adds a button raises this. */
+  --workspace-rail-count: 2;
+  --workspace-tools-top: max(80px, calc(50% - (var(--workspace-rail-count) * 60px - 12px) / 2));
+}
+
+.workspace-layout:is([data-panel="toolbox"], [data-panel="editor"], [data-panel="weather"]) .workspace-side-panel {
+  top: calc(var(--workspace-timeline-bottom) + 16px);
+}
