@@ -8,6 +8,7 @@
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { rootCertificates } from "node:tls";
 import { Pool, type PoolConfig } from "pg";
 import type { RunPayload, SavedRun } from "./run-payload";
 
@@ -17,8 +18,9 @@ let schema: Promise<{ timescale: boolean }> | null = null;
 export class DatabaseUnavailable extends Error {}
 
 /**
- * Tiger Cloud signs service certificates with its own root (ca.timescale.com), which Node does not trust by default.
- * Verify against that root (certs/timescale-ca.pem, or TIGER_CA_PATH) rather than disabling certificate checks.
+ * Tiger Cloud services may present either a publicly trusted certificate or one signed by Timescale's own root
+ * (ca.timescale.com, which Node does not trust by default, e.g. while a service is provisioning). Trust Node's
+ * standard roots plus that root (certs/timescale-ca.pem, or TIGER_CA_PATH) rather than disabling certificate checks.
  */
 function tlsConfig(url: string): PoolConfig {
   const parsed = new URL(url);
@@ -26,7 +28,7 @@ function tlsConfig(url: string): PoolConfig {
   if (!caPath) return { connectionString: url };
   // The explicit ssl option below replaces the URL's sslmode, which pg would otherwise apply over it.
   parsed.searchParams.delete("sslmode");
-  return { connectionString: parsed.toString(), ssl: { ca: readFileSync(caPath, "utf8"), rejectUnauthorized: true } };
+  return { connectionString: parsed.toString(), ssl: { ca: [...rootCertificates, readFileSync(caPath, "utf8")], rejectUnauthorized: true } };
 }
 
 function connection() {

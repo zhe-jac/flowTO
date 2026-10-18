@@ -15,7 +15,8 @@
     "data:traffic": "tsx scripts/build-traffic.ts",
     "data:traffic-topology": "tsx scripts/build-traffic-topology.ts",
     "data:events": "tsx scripts/fetch-venue-events.ts",
-    "data:traffic-geometry": "tsx scripts/refresh-traffic-geometry.ts"
+    "data:traffic-geometry": "tsx scripts/refresh-traffic-geometry.ts",
+    "data:seed-runs": "tsx scripts/seed-demo-runs.ts"
   },
   "dependencies": {
     "@deck.gl/core": "9.4.0",
