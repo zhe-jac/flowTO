@@ -55,3 +55,12 @@ test("travel direction names the compass heading", () => {
     assert.equal(travelDirection([-79.4, 43.65], [-79.39, 43.65]), "Eastbound");
     assert.equal(travelDirection([-79.4, 43.66], [-79.4, 43.65]), "Southbound");
 });
+
+test("discrete levels snap continuous congestion positions to whole levels", async () => {
+  const { discreteLevel } = await import("./model");
+  assert.equal(discreteLevel(0.7), 0);
+  assert.equal(discreteLevel(1), 1);
+  assert.equal(discreteLevel(2.99), 2);
+  assert.equal(discreteLevel(9), 3);
+  assert.equal(discreteLevel(-1), 0);
+});

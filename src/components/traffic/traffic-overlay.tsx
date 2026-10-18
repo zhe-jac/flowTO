@@ -14,7 +14,7 @@ import { CLASS_WIDTHS, congestionColor } from "@/lib/traffic/colors";
 import { closedRoadIds } from "@/lib/traffic/disruptions";
 import { continuousPulseOffset, PULSE_SPACING } from "@/lib/traffic/flow-motion";
 import { createTrafficViewport } from "@/lib/traffic/viewport";
-import { congestionForState, directionState, profileShare } from "@/lib/traffic/model";
+import { congestionForState, directionState, discreteLevel, profileShare } from "@/lib/traffic/model";
 import type { DayType, TrafficData, TrafficSegment } from "@/lib/traffic/types";
 import { FlowPathLayer } from "./flow-path-layer";
 import { useWorkspaceLayout, WorkspaceNotice } from "../workspace-layout";
@@ -23,7 +23,7 @@ import TrafficControls from "./traffic-controls";
 import { impactPriority, impactedState } from "@/lib/traffic/rerouting";
 import { disruptionStrength, disruptionWindow, splitPath, type DisruptionPlacement } from "@/lib/traffic/scenario-timing";
 import { formatClock } from "@/lib/traffic/model";
-import { tweenValue, retargetTween, junctionBlend, COLOUR_TRANSITION_MS, HIGHLIGHT_TRANSITION_MS, type VisualTween } from "@/lib/traffic/visual-transition";
+import { tweenValue, retargetTween, COLOUR_TRANSITION_MS, HIGHLIGHT_TRANSITION_MS, type VisualTween } from "@/lib/traffic/visual-transition";
 import { comparisonImpacts } from "@/lib/traffic/comparison";
 import { enrichTrafficData, suppressedVenues } from "@/lib/traffic/activity";
 import { useRerouting } from "./use-rerouting";
@@ -319,7 +319,8 @@ export default function TrafficOverlay({ map, renderer, items, interacting, onLi
                 const baseline = directionState(segments[index], share, day, weather, activity);
                 for (const flow of flowsBySegment[index]) {
                     const full = impactedState(segments[index], share, day, areaImpacts[id], weather, activity, flow.direction);
-                    displayLevel.set(flow.index, targetLevels[flow.index]);
+                    // Affected roads show one whole level along their full length; the change still blends over time.
+                    displayLevel.set(flow.index, discreteLevel(targetLevels[flow.index]));
                     if (full.level !== baseline.level || full.ratio - baseline.ratio > 0.08 || (areaImpacts[id]?.capacityScale ?? 1) < 1) nextHighlights.add(index);
                 }
             }
@@ -340,7 +341,7 @@ export default function TrafficOverlay({ map, renderer, items, interacting, onLi
             for (const id of ids) {
                 const index = segmentIndex.get(id);
                 if (index === undefined) continue;
-                const baseline = congestionForState(directionState(segments[index], share, day, weather, activity));
+                const baseline = discreteLevel(congestionForState(directionState(segments[index], share, day, weather, activity)));
                 for (const flow of flowsBySegment[index]) colourTweens.set(flow.index, retargetTween(colourTweens.get(flow.index), displayLevel.get(flow.index) ?? baseline, now, colourDuration, baseline));
                 emphasisTweens.set(index, retargetTween(emphasisTweens.get(index), highlighted.has(index) ? 1 : 0, now, preference.matches ? 0 : HIGHLIGHT_TRANSITION_MS, 0));
             }
@@ -355,20 +356,10 @@ export default function TrafficOverlay({ map, renderer, items, interacting, onLi
         const pieceColor = (piece: Piece, alpha: number): [number, number, number, number] => {
             const index = piece.flow.segment;
             const to = visualLevels.get(piece.flow.index) ?? displayLevel.get(piece.flow.index) ?? 0;
-            const shared = (point: number[], emphasis = false) => {
-                const incoming = endpoint(point) === endpoint(piece.flow.path[0]);
-                const key = `${endpoint(point)}:${emphasis}:${incoming}:${index}`;
-                const cached = junctionColourCache.get(key);
-                if (cached !== undefined) return cached;
-                const neighbours = [...(junctions.get(endpoint(point)) ?? [])].filter(i => !effectiveClosed.has(segments[i].id));
-                const connected = neighbours.flatMap(i => flowsBySegment[i]).filter(flow => flow.segment !== index && endpoint(incoming ? flow.path.at(-1)! : flow.path[0]) === endpoint(point));
-                const value = emphasis ? neighbours.length ? neighbours.reduce((sum, i) => sum + (visualEmphasis.get(i) ?? 0), 0) / neighbours.length : 0 : connected.length ? connected.reduce((sum, flow) => sum + (visualLevels.get(flow.index) ?? targetLevels[flow.index]), 0) / connected.length : to;
-                junctionColourCache.set(key, value);
-                return value;
-            };
-            const start = piece.flow.path[0], end = piece.flow.path.at(-1)!;
-            const level = junctionBlend(to, shared(start), shared(end), piece.fromStartM, piece.fromEndM);
-            const emphasis = junctionBlend(visualEmphasis.get(index) ?? 0, shared(start, true), shared(end, true), piece.fromStartM, piece.fromEndM);
+            // Each affected road is one colour end to end; blending into neighbours at junctions left short
+            // blocks mostly the neighbours' colour.
+            const level = to;
+            const emphasis = visualEmphasis.get(index) ?? 0;
             const normal = congestionColor(level), vivid = congestionColor(level, true);
             const [r, g, b] = normal.map((channel, i) => channel + (vivid[i] - channel) * emphasis);
             return [r, g, b, alpha * (highlighted.has(index) ? visualEmphasis.get(index) ?? 0 : 1)];
