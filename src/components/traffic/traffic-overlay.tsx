@@ -203,6 +203,7 @@ export default function TrafficOverlay({ map, renderer, items, interacting, onLi
         let lastCompareMode: "before" | "after" | null = null;
         const pathLength = (path: number[][]) => path.slice(1).reduce((sum, p, i) => sum + Math.hypot((p[0] - path[i][0]) * 80400, (p[1] - path[i][1]) * 111200), 0);
         let effectiveClosed = new Set<string>();
+        let closedDirections = new Set<string>();
         let effectiveKey = "";
         let pieceKey = "";
         let pieces: Piece[] = [];
@@ -228,6 +229,7 @@ export default function TrafficOverlay({ map, renderer, items, interacting, onLi
                 const index = segmentIndex.get(id);
                 if (index === undefined || effectiveClosed.has(id)) continue;
                 for (const flow of flowsBySegment[index]) {
+                    if (closedDirections.has(`${segments[index].id}:${flow.direction}`)) continue;
                     const total = pathLength(flow.path);
                     let travelled = 0;
                     for (const path of splitPath(flow.path, latestRef.current.plan?.simulation ? 8 : WAVE_PIECE_M)) {
@@ -252,7 +254,8 @@ export default function TrafficOverlay({ map, renderer, items, interacting, onLi
             stateClosures = activeKey;
             const effective = comparisonImpacts(latestRef.current.plan, scenarioItems, placedAtRef.current, minutes, mode, date);
             effectiveClosed = effective.closed;
-            effectiveKey = [...effectiveClosed].sort().join(",");
+            closedDirections = new Set(Object.entries(effective.impacts).flatMap(([id, impact]) => impact.statesByDirection?.flatMap((state, i) => state?.capacity === 0 ? [`${id}:${i === 0 ? 1 : -1}`] : []) ?? []));
+            effectiveKey = [...effectiveClosed, ...closedDirections].sort().join(",");
 
             // The affected area is drawn (bold, in normal colours) even before the disruption starts or in "Before" mode,
             // so comparing only changes colour, never width.
@@ -421,6 +424,7 @@ export default function TrafficOverlay({ map, renderer, items, interacting, onLi
                         for (const index of next) {
                             if (effectiveClosed.has(segments[index].id)) continue;
                             for (const flow of flowsBySegment[index]) {
+                                if (closedDirections.has(`${segments[index].id}:${flow.direction}`)) continue;
                                 if (flow.local) localFlows.push(flow);
                                 else if (flow.collector) collectorFlows.push(flow);
                                 else mainFlows.push(flow);

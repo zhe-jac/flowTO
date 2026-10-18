@@ -10,6 +10,15 @@ const data = (segments: TrafficSegment[]) => ({ segments, profiles: { weekday: n
 const closure: RoadDisruption = { id: "closure", kind: "closure", title: "Closure", roadId: "a", position: [-79.38, 43.65], restriction: "full-closure", startsAt: "2026-10-19T17:00", endsAt: "2026-10-19T18:00", timeZone: "America/Toronto" };
 const request = (minutes: number) => ({ items: [closure], date: "2026-10-19", minutes, weather: { rainMmPerHour: 0, snowCmPerHour: 0 } });
 
+test("a directional closure selects only the requested directed simulation edges", () => {
+  const network = data([road("a", { oneway: 0 })]);
+  const both = prepareSimulation(network, request(1060));
+  const east = prepareSimulation(network, { ...request(1060), items: [{ ...closure, travelDirection: "eastbound" }] });
+  assert.equal(both.operations[0].edges.length, 2);
+  assert.deepEqual(east.operations[0].edges.map(i => east.edges[i].direction), [1]);
+  assert.throws(() => prepareSimulation(data([road("a")]), { ...request(1060), items: [{ ...closure, travelDirection: "westbound" }] }), /travel direction/);
+});
+
 test("persistent junction IDs keep coincident but disconnected roads separate", () => {
   const input = prepareSimulation(data([road("a"), road("b")]), request(1060), { a: ["1", "2"], b: ["3", "4"] });
   assert.notEqual(input.edges[0].from, input.edges[1].from);

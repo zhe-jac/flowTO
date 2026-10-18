@@ -12,6 +12,7 @@ import { simulatorLight, type SimulatorLight } from "@/lib/daylight";
 import { createMapLighting } from "@/lib/map-lighting";
 import DisruptionToolbox from "./disruption-toolbox";
 import TrafficChat from "./traffic-chat";
+import LocationPreview, { type LocationPreviewData } from "./location-preview";
 import WorkspaceLayout, { useWorkspaceLayout } from "./workspace-layout";
 import type { ChatTrafficContext } from "@/lib/traffic/chat";
 import WeatherMenu from "./weather-menu";
@@ -26,6 +27,7 @@ export default function MapWorkspace({ map, renderer }: { map: MapboxMap | MapLi
   const [presentTime, setPresentTime] = useState(() => initialTrafficClock(window.location.search).rate.id === "live");
   const conditions = useCurrentWeather(presentTime);
   const trafficWeather = useMemo(() => conditions.mode === "current" && conditions.reading ? { rainMmPerHour: conditions.reading.rainMmPerHour, snowCmPerHour: conditions.reading.snowCmPerHour } : weatherRatesFromIntensity(conditions.weather), [conditions.mode, conditions.reading, conditions.weather]);
+  const [locationPreview, setLocationPreview] = useState<LocationPreviewData | null>(null);
   const [items, setItems] = useState<Disruption[]>([]);
   const [interacting, setInteracting] = useState(false);
   const [buildingFade, setBuildingFade] = useState<BuildingFadeController | null>(null);
@@ -60,9 +62,10 @@ export default function MapWorkspace({ map, renderer }: { map: MapboxMap | MapLi
   return (
     <>
       <WeatherPrecipitation map={map} weather={conditions.weather} night={theme === "night"} smooth={conditions.mode === "current"} />
+      <LocationPreview map={map} data={locationPreview} />
       <WorkspaceLayout>
         <WorkspaceMenus map={map} items={items} setItems={setItems} onInteractionChange={setInteracting} conditions={conditions} presentTime={presentTime} />
-        <TrafficChat context={chatContext} items={items} weather={trafficWeather} onApply={proposals => { if (items.length + proposals.length > 20) return false; setItems(current => [...current, ...proposals]); return true; }} />
+        <TrafficChat onPreview={setLocationPreview} getMapReference={() => { const p = map.getCenter(); return [p.lng, p.lat]; }} context={chatContext} items={items} weather={trafficWeather} onApply={proposals => { if (items.length + proposals.length > 20) return false; setItems(current => [...current, ...proposals]); return true; }} />
         <TrafficOverlay weather={trafficWeather} map={map} renderer={renderer} items={items} interacting={interacting} onLightChange={setLight} onPresentTimeChange={setPresentTime} buildingFade={buildingFade} onChatContext={setChatContext} />
       </WorkspaceLayout>
     </>

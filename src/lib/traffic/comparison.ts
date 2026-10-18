@@ -18,7 +18,7 @@ export function comparisonImpacts(plan: ReroutingPlan | null | undefined, items:
   for (const item of items) {
     const strength = disruptionStrength(item, placedAt.get(item.id) ?? minutes, minutes, date);
     if (strength <= 0) continue;
-    if (item.kind !== "event" && item.restriction === "full-closure") for (const roadId of affectedRoadIds(item)) closed.add(roadId);
+    if (item.kind !== "event" && item.restriction === "full-closure" && (!item.travelDirection || item.travelDirection === "both")) for (const roadId of affectedRoadIds(item)) closed.add(roadId);
     const contribution = plan?.perDisruption?.[item.id];
     if (!contribution) continue;
     for (const [id, impact] of Object.entries(contribution)) {

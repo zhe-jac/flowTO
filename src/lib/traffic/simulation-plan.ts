@@ -18,18 +18,23 @@ export function sampleSimulation(result: SimulationResult, minutes: number): Rer
   const active = result.frames.filter(frame => frame.minute <= minutes).at(-1) ?? before;
   const closed = new Set<string>();
   const capacityScales: Record<string, number> = {};
+  const edgeScales = new Map<number, number>();
   for (const operation of result.operations) if (operation.kind !== "event" && minutes >= operation.start && minutes < operation.end) for (const i of operation.edges) {
     const id = result.edges[i].id;
     capacityScales[id] = Math.min(capacityScales[id] ?? 1, operation.capacity);
-    if (operation.capacity === 0) closed.add(id);
+    edgeScales.set(i, Math.min(edgeScales.get(i) ?? 1, operation.capacity));
   }
+  const roadEdges = new Map<string, number[]>();
+  result.edges.forEach((edge, i) => { const list = roadEdges.get(edge.id) ?? []; list.push(i); roadEdges.set(edge.id, list); });
+  for (const [id, indices] of roadEdges) if (indices.every(i => edgeScales.get(i) === 0)) closed.add(id);
   for (let i = 0; i < result.edges.length; i++) {
     const edge = result.edges[i];
     const state = (scenario: boolean): SimulatedState => {
       const offset = i * 8 + (scenario ? 4 : 0);
       const value = (k: number, scale: number) => (b[offset + k] + (a[offset + k] - b[offset + k]) * mix) / scale;
-      const flow = value(0, 1), speedKmh = value(1, 100), queueVehicles = value(2, 10), vehicles = value(3, 10);
-      const capacity = edge.capacity * (scenario ? capacityScales[edge.id] ?? 1 : 1);
+      const queueVehicles = value(2, 10), vehicles = value(3, 10);
+      const capacity = edge.capacity * (scenario ? edgeScales.get(i) ?? 1 : 1);
+      const flow = capacity === 0 ? 0 : value(0, 1), speedKmh = capacity === 0 ? 0 : value(1, 100);
       return { flow, speedKmh, queueVehicles, vehicles, capacity, ratio: capacity ? flow / capacity : 0, freeSpeedKmh: edge.speed, level: levelForSpeed(speedKmh, edge.speed), delaySeconds: Math.max(0, edge.length / Math.max(0.1, speedKmh / 3.6) - edge.length / (edge.speed / 3.6)) };
     };
     const normal = state(false), changed = state(true), direction = edge.direction === 1 ? 0 : 1;

@@ -28,6 +28,7 @@ export async function POST(request: Request) {
     date = body.date;
     ({ items, day, minutes } = body);
   } catch { return NextResponse.json({ error: "Invalid disruption scenario or weather rates (maximum 20 items)." }, { status: 400 }); }
+  if (items.some(item => item.kind !== "event" && item.travelDirection && item.travelDirection !== "both")) return NextResponse.json({ error: "Directional restrictions require the traffic simulations endpoint." }, { status: 400 });
   const key = JSON.stringify({ items, day, minutes, weather, date });
   const cached = cache.get(key);
   if (cached && cached.expires > Date.now()) return NextResponse.json(cached.plan);

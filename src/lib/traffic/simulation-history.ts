@@ -9,7 +9,7 @@ export function localSimulationStamp(date: string, minutes: number) {
 }
 
 function physicalSettings(item: Disruption) {
-  return JSON.stringify(item.kind === "event" ? [item.kind, item.position, item.attendance] : [item.kind, item.position, item.roadId, item.roadSections, item.restriction]);
+  return JSON.stringify(item.kind === "event" ? [item.kind, item.position, item.attendance] : [item.kind, item.position, item.roadId, item.roadSections, item.restriction, item.travelDirection]);
 }
 
 export class SimulationHistory {

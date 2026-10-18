@@ -11,6 +11,38 @@ const a = [-79.4, 43.65], b = [-79.399, 43.65], c = [-79.398, 43.65];
 const road = (id: string, name: string, from: number[], to: number[]): Road => ({ type: "Feature", properties: { id, name, roadClass: "Major Arterial", direction: "one-way", lengthM: 100, flow: "clear" }, geometry: { type: "LineString", coordinates: [from, to] } });
 const network = [road("one", "Queen St W", a, b), road("two", "Queen St W", c, b), road("start", "Spadina Ave", a, [-79.4, 43.651]), road("end", "University Ave", c, [-79.398, 43.651])];
 
+test("cross-streets resolve a generic street across geographic name halves", () => {
+  const resolver = createStreetExtentResolver([network[0], { ...network[1], properties: { ...network[1].properties, name: "Queen St E" } }, network[2], network[3]]);
+  assert.equal(resolver.resolve("Quene Street", "Spadina", "University").roadName, "Queen St W / Queen St E");
+  assert.throws(() => resolver.resolve("Queen Street West", "Spadina", "University"), (error: unknown) => error instanceof StreetExtentError && error.code === "ambiguous" && error.choices.length === 1);
+});
+
+test("outside coverage and disconnected streets have different clarification reasons", () => {
+  const resolver = createStreetExtentResolver([...network, road("far", "Bathurst St", [-79.42, 43.65], [-79.42, 43.651])], { knownNames: ["Finch Ave E"] });
+  assert.throws(() => resolver.resolve("Finch", "Spadina", "University"), (error: unknown) => error instanceof StreetExtentError && error.code === "outside_coverage");
+  assert.throws(() => resolver.resolve("Queen", "Spadina", "Bathurst"), (error: unknown) => error instanceof StreetExtentError && error.code === "disconnected");
+});
+
+test("supported landmarks snap to a fractional road endpoint", () => {
+  const resolver = createStreetExtentResolver(network, { landmarks: [{ name: "Test Arena", position: [-79.3995, 43.6501] }] });
+  const extent = resolver.resolve("Queen", "Test Arena", "University");
+  assert.ok(Math.abs(extent.sections[0].from - 0.5) < 0.01);
+  assert.equal(extent.fromStreet, "near Test Arena");
+});
+
+test("bundled Gardiner aliases resolve both mainline carriageways and rank them above ramps", () => {
+  const data = JSON.parse(readFileSync("public/data/downtown-roads.geojson", "utf8")) as RoadCollection;
+  const resolver = createStreetExtentResolver(data.features);
+  const paths = resolver.resolveLocation("Gardiner Expressway", "Spadina Avenue", "York Street");
+  assert.equal(paths.length, 2);
+  assert.deepEqual(new Set(paths.map(p => p.travelDirection)), new Set(["eastbound", "westbound"]));
+  assert.ok(paths.every(path => path.sections.every(section => resolver.roads.get(section.roadId)!.properties.roadClass === "Expressway")));
+  assert.equal(resolver.resolveLocation("Gardiner", "Spadina", "York", "eastbound").length, 1);
+  const candidates = resolver.candidates("close both ways of the gardiner expy from spadina ave to york st");
+  for (const path of paths) assert.ok(candidates.some(road => road.properties.name === path.roadName));
+  assert.ok(!candidates.slice(0, 12).some(road => /ramp/i.test(road.properties.name)));
+});
+
 test("street descriptions resolve full connected stretches and common abbreviations without IDs", () => {
   const resolver = createStreetExtentResolver(network);
   const extent = resolver.resolve("Queen Street West", "Spadina", "University Avenue");

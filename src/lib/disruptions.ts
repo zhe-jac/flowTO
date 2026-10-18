@@ -4,11 +4,12 @@ import type { Coordinate } from "./city-boundary";
 import type { Road } from "./types";
 import { MAX_EXTENT_SECTIONS, roadSections, sectionCoordinates } from "./road-extent";
 import type { RoadSection } from "./road-extent";
+import { TRAVEL_DIRECTIONS, type TravelDirection } from "./traffic/road-travel";
 
 export type DisruptionKind = "closure" | "event" | "accident" | "construction";
 type DisruptionBase = { id: string; title: string; position: Coordinate; startsAt: string; endsAt: string; timeZone: "America/Toronto" };
 export type EventDisruption = DisruptionBase & { kind: "event"; attendance: number | null };
-export type RoadDisruption = DisruptionBase & { kind: "closure" | "accident" | "construction"; roadId: string; roadSections?: RoadSection[]; restriction: "full-closure" | "lane-reduction" };
+export type RoadDisruption = DisruptionBase & { kind: "closure" | "accident" | "construction"; roadId: string; roadSections?: RoadSection[]; restriction: "full-closure" | "lane-reduction"; travelDirection?: TravelDirection; groupId?: string };
 export type Disruption = EventDisruption | RoadDisruption;
 export const DISRUPTION_TOOLS = [
   { kind: "closure", label: "Road closure", hint: "Snap to a street", color: "#c75044" },
@@ -33,6 +34,8 @@ export function validateDisruption(item: Disruption): string | null {
   if (!item.title.trim() || item.title.length > 80) return "Give this disruption a name of up to 80 characters.";
   if (!isPointInToronto(item.position)) return "Choose a location inside Toronto.";
   if (item.kind !== "event" && !item.roadId) return "Choose a road segment for this disruption.";
+  if (item.kind !== "event" && item.travelDirection !== undefined && !TRAVEL_DIRECTIONS.includes(item.travelDirection)) return "Choose a valid travel direction.";
+  if (item.kind !== "event" && item.groupId !== undefined && (typeof item.groupId !== "string" || item.groupId.length > 100)) return "Invalid linked closure group.";
   if (item.kind !== "event" && item.roadSections !== undefined) {
     const sections = item.roadSections;
     if (!Array.isArray(sections) || !sections.length || sections.length > MAX_EXTENT_SECTIONS || sections.some(section => !section || typeof section.roadId !== "string" || !section.roadId || !Number.isFinite(section.from) || !Number.isFinite(section.to) || section.from < 0 || section.from > 1 || section.to < 0 || section.to > 1 || section.from === section.to) || !sections.some(section => section.roadId === item.roadId) || new Set(sections.map(section => section.roadId)).size !== sections.length) return "Choose a continuous road stretch using the endpoint handles.";

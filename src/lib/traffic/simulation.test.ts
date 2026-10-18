@@ -10,6 +10,15 @@ const edge = (id: string, from: number, to: number, daily = 14400, capacity = 90
 const input = (edges: SimulationEdge[], operations: SimulationInput["operations"] = []): SimulationInput => ({ edges, nodeCount: Math.max(...edges.flatMap(e => [e.from, e.to])) + 1, operations, profile: new Array(96).fill(1 / 96), start: 0, end: 40, warmup: 10, step: 2, interval: 1, warnings: [] });
 const state = (result: ReturnType<typeof simulateNetwork>, minute: number, road: string) => sampleSimulation(result, minute).impacts[road]?.statesByDirection?.[0];
 
+test("closing one direction preserves opposite capacity and does not mark the whole street closed", () => {
+  const result = simulateNetwork(input([edge("a", 0, 1), { ...edge("a", 1, 0), direction: -1 }], [{ id: "east", kind: "closure", edges: [0], start: 5, end: 30, capacity: 0, vehicles: 0 }]));
+  const plan = sampleSimulation(result, 20);
+  assert.deepEqual(plan.simulation!.closed, []);
+  assert.equal(plan.impacts.a.statesByDirection![0]!.capacity, 0);
+  assert.equal(plan.impacts.a.statesByDirection![1]!.capacity, 900);
+  assert.deepEqual(plan.impacts.a.statesByDirection![1], plan.impacts.a.baselineStatesByDirection![1]);
+});
+
 test("inferred connected trips reproduce every supplied link total without duplicating flow", () => {
   const edges = [edge("a", 0, 1), edge("b", 1, 2, 10000), edge("c", 1, 3, 4400)];
   const trips = inferTrips(edges, 4);

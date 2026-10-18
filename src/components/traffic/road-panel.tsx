@@ -60,6 +60,7 @@ export default function RoadPanel({ segment, data, clock, closed, impact, weathe
     const state = movement.state;
     const baselineState = impact?.baselineStatesByDirection?.[movement.direction === 1 ? 0 : 1];
     const movementLabel = travelDirection(movement.direction === 1 ? segment.coords[0] : segment.coords.at(-1)!, movement.direction === 1 ? segment.coords.at(-1)! : segment.coords[0]);
+    const closedMovements = (impact?.statesByDirection ?? []).flatMap((value, i) => value?.capacity === 0 ? [travelDirection(i === 0 ? segment.coords[0] : segment.coords.at(-1)!, i === 0 ? segment.coords.at(-1)! : segment.coords[0]).toLowerCase()] : []);
     const factors = weatherFactors(segment.cls, weather);
     const weatherActive = factors.speed < 1 || factors.capacity < 1;
     const level = LEVELS.find((item) => item.id === state.level)!;
@@ -82,9 +83,11 @@ export default function RoadPanel({ segment, data, clock, closed, impact, weathe
       </header>
       {closed ? <p className="road-panel-note">Closed in this scenario. Traffic is diverted to connected roads where a detour is available.</p> : null}
 
+      {!closed && closedMovements.length ? <p className="road-panel-note">Closed {closedMovements.join(" and ")} in this scenario.</p> : null}
+
       <p className="road-panel-level" style={{ borderColor: color }}>
         <i style={{ background: color }} aria-hidden="true"/>
-        <strong>{closed ? "Closed" : level.label}</strong>
+        <strong>{closed || state.capacity === 0 ? "Closed" : level.label}</strong>
         <span>at {formatClock(clock.minutes)}, {impact ? "scenario" : "typical"} {clock.day}</span>
       </p>
 

@@ -4,6 +4,7 @@ import { shiftSimulationDate, simulationDayType } from "./simulation-date";
 import { disruptionWindow } from "./scenario-timing";
 import { capacityPerDirection } from "./model";
 import { weatherFactors } from "./weather";
+import { roadTravelDirections } from "./road-travel";
 import type { SimulationInput, SimulationRequest, SimulationEdge, SimulationOperation } from "./simulation-types";
 
 export function prepareSimulation(data: TrafficData, request: SimulationRequest, topology: Record<string, [string, string]> = {}): SimulationInput {
@@ -43,8 +44,9 @@ export function prepareSimulation(data: TrafficData, request: SimulationRequest,
   const operations: SimulationOperation[] = request.items.map(item => {
     const window = disruptionWindow(item, request.minutes, request.date);
     const affected = new Set(item.kind === "event" ? [] : affectedRoadIds(item));
-    const selected = edges.flatMap((edge, index) => affected.has(edge.id) ? [index] : []);
-    if (item.kind !== "event" && !selected.length) throw new Error("A selected street is outside the simulation network.");
+    const directions = item.kind === "event" ? null : roadTravelDirections(item, id => byId.get(id)?.coords);
+    const selected = edges.flatMap((edge, index) => affected.has(edge.id) && (!directions || directions.get(edge.id) === edge.direction) ? [index] : []);
+    if (item.kind !== "event" && !selected.length) throw new Error(directions ? "The selected street does not support that travel direction. Check its extent and direction." : "A selected street is outside the simulation network.");
     const nearest = item.kind === "event" ? roads.reduce((best, road) => {
       const score = Math.hypot((road.coords[0][0] - item.position[0]) * 80000, (road.coords[0][1] - item.position[1]) * 111000);
       return score < best.score ? { score, id: road.id } : best;

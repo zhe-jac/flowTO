@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { enrichTrafficData } from "./activity";
+import { enrichTrafficData, VENUES, EMPLOYMENT_HUBS } from "./activity";
 import type { RoadCollection } from "../types";
 import { createStreetExtentResolver } from "./street-extent";
 import type { TrafficData } from "./types";
@@ -11,6 +11,6 @@ export function trafficData() {
 
 let streets: Promise<ReturnType<typeof createStreetExtentResolver>> | undefined;
 export function placementStreets() {
-  return streets ??= readFile(`${process.cwd()}/public/data/downtown-roads.geojson`, "utf8")
-    .then(text => createStreetExtentResolver((JSON.parse(text) as RoadCollection).features));
+  return streets ??= Promise.all([readFile(`${process.cwd()}/public/data/downtown-roads.geojson`, "utf8"), trafficData()])
+    .then(([text, data]) => createStreetExtentResolver((JSON.parse(text) as RoadCollection).features, { knownNames: [...new Set(data.segments.map(road => road.name))], landmarks: [...VENUES, ...EMPLOYMENT_HUBS] }));
 }

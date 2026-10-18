@@ -37,7 +37,7 @@ test("natural road descriptions create one editable multi-segment proposal", asy
   const [proposal] = chatDisruptions([{ kind: "closure", title: "Queen closure", roadName: "Queen Street West", fromStreet: "Spadina", toStreet: "University", startMinutes: 1020, durationMinutes: 120 }], [], "2026-10-17", streets);
   assert.equal(proposal.kind, "closure");
   assert.equal(proposal.startsAt, "2026-10-17T17:00");
-  assert.equal(proposal.locationLabel, "Queen St W: Spadina Ave → University Ave");
+  assert.equal(proposal.locationLabel, "Queen St W: Spadina Ave → University Ave · both directions");
   assert.ok(proposal.roadSections!.length > 1);
   assert.ok(proposal.roadSections!.some(section => section.roadId === proposal.roadId));
   assert.throws(() => chatDisruptions([{ kind: "closure", title: "Unspecified extent", roadName: "Queen", startMinutes: 1020, durationMinutes: 120 }], [], "2026-10-17", streets), /cross-streets/);

@@ -33,7 +33,7 @@ export default function DisruptionEditor({ draft, road, extent, existing, error,
       <form onSubmit={(event) => { event.preventDefault(); onSave(); }}>
         <div className="disruption-editor-body">
           <p className="disruption-location">{road ? `${extent?.names.join(" → ") || road.properties.name} · ${Math.round(extent?.lengthM ?? road.properties.lengthM).toLocaleString()} m affected` : `${draft.position[1].toFixed(5)}, ${draft.position[0].toFixed(5)} · Toronto`}</p>
-          {road ? <p className="closure-direction">{road.properties.direction}</p> : null}
+          {road ? <p className="closure-direction">{draft.kind !== "event" && draft.travelDirection && draft.travelDirection !== "both" ? `${draft.travelDirection} affected` : road.properties.direction}</p> : null}
           {road ? <p id="road-extent-help" className="road-extent-help">Drag a handle onto a street to snap from the last intersection. Earlier blocks stay fixed. Trace back to shorten, or use arrow keys on a focused handle. Save to apply.</p> : null}
           <label className="disruption-field">Name<input required maxLength={80} value={draft.title} onChange={(event) => onChange({ ...draft, title: event.target.value })} /></label>
           {draft.kind === "event" ? <label className="disruption-field">Expected attendance <span className="disruption-optional">Optional estimate</span><input type="number" min="0" max="1000000" step="1" inputMode="numeric" placeholder="Not specified" value={draft.attendance ?? ""} onChange={(event) => onChange({ ...draft, attendance: event.target.value === "" ? null : event.target.valueAsNumber })} /></label> : (

@@ -3074,3 +3074,14 @@ button {
     background: #102c40;
   }
 }
+
+.traffic-chat-location-choice {
+  display: block;
+  width: 100%;
+  margin: 8px 0;
+  text-align: left;
+}
+
+.traffic-chat-proposals > button:not(.traffic-chat-location-choice) + button:not(.traffic-chat-location-choice) {
+  margin-left: 8px;
+}
