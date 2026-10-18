@@ -1,8 +1,10 @@
-# Toronto Traffic Sandbox
+<p align="center"><img src="docs/flowto-logo.png" alt="flowTO logo" width="320"></p>
+
+# flowTO
 
 **See what road closures, construction, events and weather do to Toronto traffic, before they happen.**
 
-Place a disruption on a map of Toronto, and the sandbox simulates how traffic diverts, where queues form and how long the city takes to recover, compared with a normal day.
+Place a disruption on a map of Toronto, and flowTO simulates how traffic diverts, where queues form and how long the city takes to recover, compared with a normal day.
 
 Built for Hack the Valley 2026 (Hack the Valley x School of Cities track). It tests plans and policies, not candidates: there are no election predictions or voting recommendations.
 
