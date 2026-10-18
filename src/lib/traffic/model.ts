@@ -27,8 +27,12 @@ export function congestionForState(state: Pick<DirectionState, "speedKmh" | "fre
     for (let i = 1; i < stops.length; i++) if (fraction >= stops[i]) return Math.max(0, i - 1 + (stops[i - 1] - fraction) / (stops[i - 1] - stops[i]));
     return 3;
 }
+/** The whole congestion level (0 free … 3 stop-and-go) for a continuous congestion position. */
+export function discreteLevel(position: number) {
+    return Math.min(LEVELS.length - 1, Math.max(0, Math.floor(position)));
+}
 export function levelForSpeed(speedKmh: number, freeSpeedKmh: number): CongestionLevel {
-    return LEVELS[Math.min(3, Math.floor(congestionForState({ speedKmh, freeSpeedKmh })))].id;
+    return LEVELS[discreteLevel(congestionForState({ speedKmh, freeSpeedKmh }))].id;
 }
 export const MINUTES_PER_DAY = 1440;
 export function profileShare(profile: number[], minutes: number) {

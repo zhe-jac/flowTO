@@ -1,5 +1,6 @@
 "use client";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, useMemo } from "react";
+import { createDockGesture } from "@/lib/dock-gestures";
 import { WorkspaceDockPane } from "./workspace-layout";
 import type { Disruption } from "@/lib/disruptions";
 import type { ChatTrafficContext, ChatProposal, ChatLocationChoice } from "@/lib/traffic/chat";
@@ -41,6 +42,8 @@ export default function TrafficChat({ context, items, weather, onApply, onPrevie
   const toggleRef = useRef<HTMLButtonElement>(null);
   useEffect(() => () => request.current?.abort(), []);
   function showConversation() { setOpen(true); }
+  // Click blank space to expand; double-click blank space to minimize.
+  const gesture = useMemo(() => createDockGesture(), []);
   useEffect(() => { if (log.current) log.current.scrollTop = history ? log.current.scrollHeight : 0; }, [messages, loading, open, history]);
   async function send(event: FormEvent) {
     event.preventDefault();
@@ -73,7 +76,7 @@ export default function TrafficChat({ context, items, weather, onApply, onPrevie
     setError("");
   }
   const visibleMessages = history ? messages : messages.slice(-1);
-  return <WorkspaceDockPane name="assistant"><section id="traffic-chat-panel" className="traffic-chat traffic-chat-panel" data-expanded={open} aria-label="Traffic assistant" onKeyDown={event => {
+  return <WorkspaceDockPane name="assistant"><section id="traffic-chat-panel" className="traffic-chat traffic-chat-panel" data-expanded={open} aria-label="Traffic assistant" onClick={event => { if (gesture.shouldExpand(!open, event.target, event.detail)) showConversation(); }} onDoubleClick={event => { if (!gesture.shouldCollapse(!open, event.target)) return; window.getSelection()?.removeAllRanges(); setOpen(false); onPreview?.(null); }} onKeyDown={event => {
     if (event.key !== "Escape") return;
     event.preventDefault();
     event.stopPropagation();

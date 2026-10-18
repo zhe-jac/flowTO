@@ -157,7 +157,7 @@ export default function TrafficDashboard({ run, loading, items, date, minutes, w
     <GlassSurface variant="button"><button ref={triggerRef} type="button" className="toolbox-toggle results-toggle" data-panel-trigger="results" aria-label="Scenario results" aria-expanded={open} aria-controls={open ? id : undefined} title="Scenario results" onClick={() => setPanel(open ? null : "results")}>
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2" /></svg>
     </button></GlassSurface>
-    <WorkspacePanel name="results"><section id={id} className="toolbox-panel dashboard-panel" aria-label="Scenario results">
+    <WorkspacePanel name="results" dismissOnDoubleClick><section id={id} className="toolbox-panel dashboard-panel" aria-label="Scenario results">
       <div className="toolbox-heading"><div><span className="toolbox-eyebrow">MEASURE THE IMPACT</span><h2>Results</h2></div><button ref={closeRef} className="toolbox-close" type="button" aria-label="Close results" onClick={close}><DisruptionIcon kind="close" /></button></div>
 
       {!items.length ? <p className="dashboard-note">Place a closure, event, accident or construction to compare it with a normal day.</p>

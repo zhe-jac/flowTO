@@ -1,5 +1,6 @@
 "use client";
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import { createDockGesture } from "@/lib/dock-gestures";
 import { CLOCK_RATES, clockOnDate, torontoNow, type ClockState } from "@/lib/traffic/clock";
 import { formatClock, MINUTES_PER_DAY } from "@/lib/traffic/model";
 import SimulationDatePicker from "./simulation-date-picker";
@@ -25,6 +26,8 @@ export default function TrafficControls({ clock, profile, vehicles, closures, sc
     const [minimized, setMinimized] = useState(true);
     const collapsed = minimized;
     const toggleMinimized = () => setMinimized(value => !value);
+    // Click blank space to expand; double-click blank space to minimize.
+    const gesture = useMemo(() => createDockGesture(), []);
     const live = clock.rate.id === "live";
     const chooseRate = (id: string) => {
         const rate = CLOCK_RATES.find((item) => item.id === id) ?? CLOCK_RATES[1];
@@ -34,7 +37,7 @@ export default function TrafficControls({ clock, profile, vehicles, closures, sc
         const next = clockOnDate(clock, date);
         onChange({ date: next.date, day: next.day, rate: next.rate });
     };
-    return (<WorkspaceDockPane name="timeline"><div className="traffic-controls-shell" data-map-ui data-minimized={collapsed}><section className="traffic-controls" aria-label="Traffic simulation playback">
+    return (<WorkspaceDockPane name="timeline"><div className="traffic-controls-shell" data-map-ui data-minimized={collapsed}><section className="traffic-controls" aria-label="Traffic simulation playback" onClick={event => { if (gesture.shouldExpand(collapsed, event.target, event.detail)) setMinimized(false); }} onDoubleClick={event => { if (!gesture.shouldCollapse(collapsed, event.target)) return; window.getSelection()?.removeAllRanges(); setMinimized(true); }}>
       <button type="button" className="traffic-minimize" aria-expanded={!collapsed} aria-label={collapsed ? "Expand traffic controls" : "Minimize traffic controls"} title={collapsed ? "Expand traffic controls" : "Minimize traffic controls"} onClick={toggleMinimized}>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={collapsed ? "m6 9 6 6 6-6" : "m6 15 6-6 6 6"} /></svg>
       </button>

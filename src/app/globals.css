@@ -3445,4 +3445,38 @@ button {
   margin-top: 4px;
   color: var(--ui-muted);
   font-size: 9px;
+
+/* Minimized dock panels expand when their blank space is clicked. */
+.traffic-controls-shell[data-minimized="true"] .traffic-controls,
+.traffic-chat-panel[data-expanded="false"] {
+  cursor: pointer;
+}
+
+/* Left tool rail: the buttons sit centred halfway down the screen, and every left-side panel opens in the same place. */
+.workspace-layout {
+  /* Number of rail buttons (48 px each, 12 px apart); a branch that adds a button raises this. */
+  --workspace-rail-count: 3;
+  --workspace-tools-top: max(80px, calc(50% - (var(--workspace-rail-count) * 60px - 12px) / 2));
+}
+
+.workspace-layout:is([data-panel="toolbox"], [data-panel="editor"], [data-panel="weather"], [data-panel="results"]) .workspace-side-panel {
+  top: calc(var(--workspace-timeline-bottom) + 40px);
+}
+
+/* Street info pops in from its corner when a road is clicked. */
+@keyframes road-panel-pop {
+  from { opacity: 0; transform: translateY(-6px) scale(0.94); }
+  60% { opacity: 1; transform: translateY(0) scale(1.012); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.road-panel-shell {
+  transform-origin: top right;
+  animation: road-panel-pop 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .road-panel-shell {
+    animation: none;
+  }
 }
