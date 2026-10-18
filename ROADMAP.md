@@ -2,12 +2,33 @@
 
 ## Current priorities (team update)
 
-- **Now:** themed Gemini chat for specific event/road proposals and grounded traffic summaries; employment-hub and dated sports/venue demand context.
+- **Implemented for the demo:** themed Gemini chat for specific event/road proposals and grounded traffic summaries; employment-hub and dated sports/venue demand context. Live AI availability still depends on Gemini.
 - **Good enough for the demo:** existing map/UI, Before/After toggle, rerouting and citywide weather. Do not expand these ahead of the chat workflow.
 - **Later:** longer-term congestion/time skipping and further traffic-data coverage.
 - **Final stage:** camera presets; satellite/other basemap layers; playback time windows; results/dashboard; sharing; methodology/documentation; localised weather; and a database of scenario/test runs with aggregate graphs for comparing larger traffic patterns.
 
 The original phase checklist below is a reference plan, not an accurate implementation-status checklist. A trip-based queue simulation and calibrated outcomes remain separate from the current illustrative road-flow model.
+
+### Later: longer-term traffic exploration
+
+- [ ] Add time skipping to explore how longer-lasting traffic jams affect surrounding roads and city traffic over time. This needs congestion persistence/queue behavior; simply accelerating the current playback does not model accumulated jams.
+- [ ] Expand traffic-data coverage beyond the employment hubs and dated venue activity already added, including more sports/concert schedules and better local demand information.
+
+### Final stage: explicitly deferred by the team
+
+These tasks come after the core demo workflow is reliable, even where the original phase plan below labels them P0/P1. This ordering takes precedence over that older plan.
+
+- [ ] **Camera presets:** buttons to jump to Downtown, Gardiner/DVP, Midtown, North York Centre and Scarborough Centre.
+- [ ] **Map layers:** satellite imagery and other optional basemap/layer choices.
+- [ ] **Playback windows:** AM rush, midday, PM rush and custom time windows, plus convenient time-jump controls.
+- [ ] **Results/dashboard:** baseline-versus-scenario metrics, affected-road rankings and comparison charts. Add ward results, emissions and other outcome scores only when the model supports them.
+- [ ] **Sharing:** links that restore a scenario, followed by exports or saved-scenario browsing as needed.
+- [ ] **Documentation:** update the README and implementation checklist; add methodology, data sources/versions, assumptions, limitations and validation results.
+- [ ] **Localised weather:** draw/select smaller weather areas. Citywide Toronto weather is sufficient for the demo.
+- [ ] **Scenario/test database:** save scenario inputs, dates, model/data versions and measured or estimated results from many runs.
+- [ ] **Cross-run analysis:** use those saved runs to compare scenarios in graphs and tables and explore larger traffic patterns over time; distinguish repeatable estimates from observed outcomes.
+
+**Keep as-is for now:** the existing map/UI, Before/After toggle, rerouting and citywide weather are good enough. Side-by-side/swipe comparisons and further cosmetic map work are optional final-stage polish, not demo blockers.
 
 Everything needed to go from an empty repo to a judged, submitted project. Tasks are tagged by priority:
 
