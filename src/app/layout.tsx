@@ -5,8 +5,8 @@ import "mapbox-gl/dist/mapbox-gl.css";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Toronto Traffic Sandbox",
-  description: "An interactive street map of Toronto.",
+  title: "flowTO",
+  description: "See what road closures, construction, events and weather do to Toronto traffic.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
