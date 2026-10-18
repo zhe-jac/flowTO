@@ -6,7 +6,9 @@
  * Server-only. Enabled by TIGER_DATABASE_URL (a Postgres connection string, e.g. with sslmode=require). Without it,
  * every function reports that the database is not configured and the app keeps working without saved runs.
  */
-import { Pool } from "pg";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { Pool, type PoolConfig } from "pg";
 import type { RunPayload, SavedRun } from "./run-payload";
 
 let pool: Pool | null = null;
@@ -14,10 +16,23 @@ let schema: Promise<{ timescale: boolean }> | null = null;
 
 export class DatabaseUnavailable extends Error {}
 
+/**
+ * Tiger Cloud signs service certificates with its own root (ca.timescale.com), which Node does not trust by default.
+ * Verify against that root (certs/timescale-ca.pem, or TIGER_CA_PATH) rather than disabling certificate checks.
+ */
+function tlsConfig(url: string): PoolConfig {
+  const parsed = new URL(url);
+  const caPath = process.env.TIGER_CA_PATH?.trim() || (parsed.hostname.endsWith(".tsdb.cloud.timescale.com") ? path.join(process.cwd(), "certs/timescale-ca.pem") : "");
+  if (!caPath) return { connectionString: url };
+  // The explicit ssl option below replaces the URL's sslmode, which pg would otherwise apply over it.
+  parsed.searchParams.delete("sslmode");
+  return { connectionString: parsed.toString(), ssl: { ca: readFileSync(caPath, "utf8"), rejectUnauthorized: true } };
+}
+
 function connection() {
   const url = process.env.TIGER_DATABASE_URL?.trim();
   if (!url) throw new DatabaseUnavailable("Tiger Data is not configured. Set TIGER_DATABASE_URL to save and compare runs.");
-  pool ??= new Pool({ connectionString: url, max: 4, idleTimeoutMillis: 30000, connectionTimeoutMillis: 8000 });
+  pool ??= new Pool({ ...tlsConfig(url), max: 4, idleTimeoutMillis: 30000, connectionTimeoutMillis: 8000 });
   return pool;
 }
 
