@@ -344,6 +344,7 @@ export default function DisruptionToolbox({ map, items, setItems, onInteractionC
   }
 
   function resetScenario() {
+    window.dispatchEvent(new Event("traffic-scenario-reset"));
     cancelRef.current();
     itemsRef.current = [];
     setItems([]);

@@ -6,7 +6,7 @@ import { chatDisruptions } from "@/lib/traffic/chat";
 import { EMPLOYMENT_HUBS, EMPLOYMENT_STATS, VENUES, VENUE_EVENTS, ACTIVITY_SOURCES, suppressedVenues } from "@/lib/traffic/activity";
 import { validSimulationDate } from "@/lib/traffic/simulation-date";
 import { profileShare, directionState } from "@/lib/traffic/model";
-import { impactedDirectionStates, type Impact } from "@/lib/traffic/rerouting";
+import { impactedDirectionStates, validSimulatedStates, type Impact } from "@/lib/traffic/rerouting";
 import { parseWeatherRates } from "@/lib/weather";
 import { validateDisruption, type Disruption } from "@/lib/disruptions";
 
@@ -25,7 +25,7 @@ export async function POST(request: Request) {
     if (!Array.isArray(body.items) || body.items.length > 20 || body.items.some((item: Disruption) => !item || !["closure", "construction", "accident", "event"].includes(item.kind) || typeof item.title !== "string" || !Array.isArray(item.position) || item.position.length !== 2 || item.position.some(n => !Number.isFinite(n)) || typeof item.startsAt !== "string" || typeof item.endsAt !== "string" || validateDisruption(item))) throw new Error();
     body.weather = parseWeatherRates(body.weather);
     if (!c.impacts || typeof c.impacts !== "object" || Array.isArray(c.impacts) || Object.keys(c.impacts).length > 2000 || Object.values(c.impacts).some((v: unknown) => {
-      const i = v as Impact; return !i || !Number.isFinite(i.addedHourly) || i.addedHourly < 0 || i.addedHourly > 1000000 || !Number.isFinite(i.retained) || i.retained < 0 || i.retained > 1 || !Number.isFinite(i.capacityScale) || i.capacityScale < 0 || i.capacityScale > 1 || (i.addedByDirection !== undefined && (!Array.isArray(i.addedByDirection) || i.addedByDirection.length !== 2 || i.addedByDirection.some(value => !Number.isFinite(value) || value < 0) || Math.abs(i.addedByDirection[0] + i.addedByDirection[1] - i.addedHourly) > 0.01));
+      const i = v as Impact; return !i || !Number.isFinite(i.addedHourly) || i.addedHourly < 0 || i.addedHourly > 1000000 || !Number.isFinite(i.retained) || i.retained < 0 || i.retained > 1 || !Number.isFinite(i.capacityScale) || i.capacityScale < 0 || i.capacityScale > 1 || (i.addedByDirection !== undefined && (!Array.isArray(i.addedByDirection) || i.addedByDirection.length !== 2 || i.addedByDirection.some(value => !Number.isFinite(value) || value < 0) || Math.abs(i.addedByDirection[0] + i.addedByDirection[1] - i.addedHourly) > 0.01)) || (i.statesByDirection !== undefined && !validSimulatedStates(i.statesByDirection)) || (i.baselineStatesByDirection !== undefined && !validSimulatedStates(i.baselineStatesByDirection));
     })) throw new Error();
   } catch { return NextResponse.json({ error: "The chat request was invalid. Try a shorter message." }, { status: 400 }); }
   if (!process.env.GEMINI_API_KEY) return NextResponse.json({ error: "Set GEMINI_API_KEY on the server to use the assistant. Manual map tools still work." }, { status: 503 });
@@ -37,9 +37,9 @@ export async function POST(request: Request) {
     const share = profileShare(data.profiles[c.day as "weekday" | "weekend"], c.minutes);
     const activity = { minutes: c.minutes, date: c.date, suppressedVenues: suppressedVenues(body.items) };
     const states = data.segments.map(road => {
-      const baseline = directionState(road, share, c.day, body.weather, activity);
+      const baseline = c.impacts[road.id]?.baselineStatesByDirection ? impactedDirectionStates(road, share, c.day, { ...c.impacts[road.id], statesByDirection: c.impacts[road.id].baselineStatesByDirection }, body.weather, activity)[0].state : directionState(road, share, c.day, body.weather, activity);
       const after = impactedDirectionStates(road, share, c.day, c.impacts[road.id], body.weather, activity)[0].state;
-      return { id: road.id, name: road.name, baselineSpeedKmh: Math.round(baseline.speedKmh), scenarioSpeedKmh: Math.round(after.speedKmh), addedHourly: c.impacts[road.id]?.addedHourly ?? 0, capacityScale: c.impacts[road.id]?.capacityScale ?? 1, ratio: after.ratio };
+      return { id: road.id, name: road.name, baselineSpeedKmh: Math.round(baseline.speedKmh), scenarioSpeedKmh: Math.round(after.speedKmh), queueVehicles: "queueVehicles" in after ? after.queueVehicles : undefined, baselineQueueVehicles: "queueVehicles" in baseline ? baseline.queueVehicles : undefined, addedHourly: c.impacts[road.id]?.addedHourly ?? 0, capacityScale: c.impacts[road.id]?.capacityScale ?? 1, ratio: after.ratio };
     });
     const last = body.messages.at(-1).content.toLowerCase();
     const words: string[] = last.match(/[a-z]{3,}/g) ?? [];

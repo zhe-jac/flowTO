@@ -13,6 +13,7 @@
     "data:build": "tsx scripts/build-roads.ts",
     "data:boundary": "tsx scripts/build-city-boundary.ts && tsx scripts/build-city-fade.ts",
     "data:traffic": "tsx scripts/build-traffic.ts",
+    "data:traffic-topology": "tsx scripts/build-traffic-topology.ts",
     "data:events": "tsx scripts/fetch-venue-events.ts",
     "data:traffic-geometry": "tsx scripts/refresh-traffic-geometry.ts"
   },

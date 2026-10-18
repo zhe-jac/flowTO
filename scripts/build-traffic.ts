@@ -397,4 +397,5 @@ const output: TrafficData = {
     })),
 };
 await writeFile("public/data/traffic.json", JSON.stringify(output));
+await writeFile("public/data/traffic-topology.json", JSON.stringify(Object.fromEntries(segments.map(segment => [segment.id, [segment.from, segment.to]]))));
 console.log(`Built ${segments.length} segments (${JSON.stringify(counts)}); profiles from ${profileDays.weekday} weekday and ${profileDays.weekend} weekend count days; 1 dot ≈ ${vehiclesPerDot} vehicles.`);

@@ -1,15 +1,27 @@
 import { DRY_WEATHER, type WeatherRates } from "../weather";
 import type { Disruption } from "../disruptions";
 import { affectedRoadIds, roadSections, type RoadSection } from "../road-extent";
-import { directionState, congestedSpeed, levelFor, profileShare } from "./model";
+import { directionState, congestedSpeed, levelForSpeed, profileShare } from "./model";
+import type { SimulatedState, SimulationLedger } from "./simulation-types";
 import type { DayType, TrafficData, TrafficSegment } from "./types";
 import { suppressedVenues, type ActivityContext } from "./activity";
 import { disruptionStrength } from "./scenario-timing";
 
-export type Impact = { addedHourly: number; retained: number; capacityScale: number; addedByDirection?: [number, number] };
+export type Impact = { addedHourly: number; retained: number; capacityScale: number; addedByDirection?: [number, number]; statesByDirection?: [SimulatedState | null, SimulatedState | null]; baselineStatesByDirection?: [SimulatedState | null, SimulatedState | null] };
 export type RouteOption = { id: string; roads: string[]; minutes: number; directions?: (1 | -1)[] };
 export type Choice = { id: string; weights: number[]; eventVehicles: number };
-export type ReroutingPlan = { impacts: Record<string, Impact>; perDisruption?: Record<string, Record<string, Impact>>; unroutedHourly?: number; source: "solver" | "gemini" | "local"; summary: string; warning?: string; elapsedMs?: number };
+export type ReroutingPlan = { impacts: Record<string, Impact>; perDisruption?: Record<string, Record<string, Impact>>; unroutedHourly?: number; source: "solver" | "gemini" | "local"; summary: string; warning?: string; elapsedMs?: number; simulation?: { baseline: Record<string, Impact>; closed: string[]; baselineLedger: SimulationLedger; ledger: SimulationLedger; warnings: string[]; minute: number; version: string; runKey?: string } };
+export function impactPriority(impact: Impact) {
+  let priority = impact.addedHourly + (1 - impact.capacityScale) * 1000;
+  impact.statesByDirection?.forEach((state, i) => {
+    const base = impact.baselineStatesByDirection?.[i];
+    if (state && base) priority += Math.max(0, state.queueVehicles - base.queueVehicles) * 20 + Math.max(0, base.speedKmh - state.speedKmh) * 10;
+  });
+  return priority;
+}
+export function validSimulatedStates(value: unknown): value is [SimulatedState | null, SimulatedState | null] {
+  return Array.isArray(value) && value.length === 2 && value.every(state => state === null || typeof state === "object" && ["flow", "capacity", "ratio", "speedKmh", "freeSpeedKmh", "queueVehicles", "vehicles", "delaySeconds"].every(key => typeof state[key] === "number" && Number.isFinite(state[key]) && state[key] >= 0 && state[key] <= 1000000) && ["free", "moderate", "heavy", "severe"].includes(state.level));
+}
 type Scenario = { item: Disruption; sourceId: string; roads: string[]; routes: RouteOption[]; demand: number; retained: number };
 type Edge = { to: string; road: TrafficSegment; cost: number; direction: 1 | -1 };
 const node = (p: number[]) => `${p[0].toFixed(5)},${p[1].toFixed(5)}`;
@@ -235,18 +247,24 @@ export function buildPlan(scenarios: Scenario[], choices: Choice[] = [], source:
 }
 
 export function impactedState(segment: TrafficSegment, share: number, day: DayType, impact?: Impact, weather: WeatherRates = DRY_WEATHER, context?: ActivityContext, direction?: 1 | -1) {
+  if (impact?.statesByDirection) {
+    const states = impact.statesByDirection.filter((state): state is SimulatedState => state !== null);
+    const state = direction ? impact.statesByDirection[direction === 1 ? 0 : 1] : states.sort((a, b) => a.speedKmh - b.speedKmh)[0];
+    if (state) return state;
+  }
   const base = directionState(segment, share, day, weather, context);
   if (!impact) return base;
   const added = impact.addedByDirection && (direction || segment.oneway !== 0) ? impact.addedByDirection[(direction ?? segment.oneway) === 1 ? 0 : 1] : impact.addedHourly / (segment.oneway === 0 ? 2 : 1);
   const flow = base.flow * impact.retained + added;
   const capacity = base.capacity * impact.capacityScale;
   const ratio = capacity > 0 ? flow / capacity : 0;
-  return { flow, capacity, ratio, freeSpeedKmh: base.freeSpeedKmh, speedKmh: capacity > 0 ? congestedSpeed(base.freeSpeedKmh, ratio) : 0, level: levelFor(ratio) };
+  const speedKmh = capacity > 0 ? congestedSpeed(base.freeSpeedKmh, ratio) : 0;
+  return { flow, capacity, ratio, freeSpeedKmh: base.freeSpeedKmh, speedKmh, level: levelForSpeed(speedKmh, base.freeSpeedKmh) };
 }
 
 export function impactedDirectionStates(segment: TrafficSegment, share: number, day: DayType, impact?: Impact, weather: WeatherRates = DRY_WEATHER, context?: ActivityContext) {
   const directions: (1 | -1)[] = segment.oneway === 0 ? [1, -1] : [segment.oneway];
-  return directions.map(direction => ({ direction, state: impactedState(segment, share, day, impact, weather, context, direction) })).sort((a, b) => b.state.ratio - a.state.ratio);
+  return directions.map(direction => ({ direction, state: impactedState(segment, share, day, impact, weather, context, direction) })).sort((a, b) => a.state.speedKmh - b.state.speedKmh || b.state.ratio - a.state.ratio);
 }
 
 export function validateChoices(value: unknown, scenarios: Scenario[]): Choice[] {

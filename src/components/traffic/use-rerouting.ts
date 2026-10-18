@@ -1,31 +1,59 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { WeatherRates } from "@/lib/weather";
 import type { Disruption } from "@/lib/disruptions";
 import type { DayType } from "@/lib/traffic/types";
-import type { ReroutingPlan } from "@/lib/traffic/rerouting";
+import type { SimulationJob, SimulationResult } from "@/lib/traffic/simulation-types";
+import { sampleSimulation } from "@/lib/traffic/simulation-plan";
+import { SimulationHistory } from "@/lib/traffic/simulation-history";
+import type { DisruptionPlacement } from "@/lib/traffic/scenario-timing";
 
-export function useRerouting(items: Disruption[], day: DayType, minutes: number, weather: WeatherRates, date?: string) {
-  const [result, setResult] = useState<{ key: string; scenarioKey: string; plan: ReroutingPlan } | null>(null);
+export function useRerouting(items: Disruption[], _day: DayType, minutes: number, weather: WeatherRates, date = "2026-10-18", placedAt?: ReadonlyMap<string, DisruptionPlacement>) {
+  const [result, setResult] = useState<{ key: string; data: SimulationResult } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [retry, setRetry] = useState(0);
-  const bucket = Math.floor(minutes / 15) * 15;
-  const latestStart = Math.max(bucket, ...items.map(item => item.startsAt.slice(0, 10) === date ? Number(item.startsAt.slice(11, 13)) * 60 + Number(item.startsAt.slice(14, 16)) : bucket).filter(start => start <= minutes));
-  const key = JSON.stringify({ items, day, weather, date, minutes: latestStart });
-  const scenarioKey = JSON.stringify({ items, day, weather, date });
+  const [generation, setGeneration] = useState(0);
+  const history = useRef<SimulationHistory | null>(null);
+  history.current ??= new SimulationHistory();
+  const anchor = useRef({ date, minute: Math.floor(minutes / 60) * 60 });
+  if (anchor.current.date !== date || minutes < anchor.current.minute - 30 || minutes >= anchor.current.minute + 115) anchor.current = { date, minute: Math.floor(minutes / 60) * 60 };
+  const operations = history.current.update(items, date, minutes, anchor.current.minute, placedAt);
+  const key = JSON.stringify({ items: operations, date, minutes: anchor.current.minute, weather, generation });
+  const clockKey = Math.floor(minutes * 2) / 2;
+
+  useEffect(() => {
+    const reset = () => { history.current?.reset(); setResult(null); setError(null); setGeneration(value => value + 1); };
+    window.addEventListener("traffic-scenario-reset", reset);
+    return () => window.removeEventListener("traffic-scenario-reset", reset);
+  }, []);
+
   useEffect(() => {
     setError(null);
-    if (!items.length) return;
+    if (!JSON.parse(key).items.length) return;
     const controller = new AbortController();
-    const timer = setTimeout(async () => {
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = async (id?: string) => {
       try {
-        const response = await fetch("/api/traffic/reroute", { method: "POST", headers: { "Content-Type": "application/json" }, body: key, signal: controller.signal });
-        if (!response.ok) throw new Error(response.status === 400 ? "This scenario could not be analyzed (maximum 20 disruptions)." : "Traffic analysis failed. Please retry.");
-        const plan = await response.json() as ReroutingPlan;
-        if (!controller.signal.aborted) setResult({ key, scenarioKey, plan });
-      } catch (cause) { if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : "Traffic analysis failed."); }
-    }, 700);
+        const response = await fetch(id ? `/api/traffic/simulations/${encodeURIComponent(id)}` : "/api/traffic/simulations", id ? { signal: controller.signal } : { method: "POST", headers: { "Content-Type": "application/json" }, body: key, signal: controller.signal });
+        const job = await response.json() as SimulationJob & { error?: string };
+        if (!response.ok) throw new Error(job.error ?? "Traffic simulation failed. Please retry.");
+        if (controller.signal.aborted) return;
+        if (job.status === "failed") throw new Error(job.error ?? "Traffic simulation failed.");
+        if (job.status === "complete" && job.result) setResult({ key, data: job.result });
+        else timer = setTimeout(() => { void poll(job.id); }, 500);
+      } catch (cause) {
+        if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : "Traffic simulation failed.");
+      }
+    };
+    timer = setTimeout(() => { void poll(); }, 500);
     return () => { clearTimeout(timer); controller.abort(); };
-  }, [key, scenarioKey, retry, items.length]);
-  return { plan: items.length && result?.scenarioKey === scenarioKey ? result.plan : null, error, loading: items.length > 0 && result?.key !== key && !error, retry: () => setRetry(n => n + 1) };
+  }, [key, retry]);
+
+  const plan = useMemo(() => {
+    if (!operations.length || result?.key !== key) return null;
+    const sampled = sampleSimulation(result.data, clockKey);
+    sampled.simulation!.runKey = key;
+    return sampled;
+  }, [result, key, clockKey, operations.length]);
+  return { plan, error, loading: operations.length > 0 && result?.key !== key && !error, retry: () => setRetry(n => n + 1) };
 }

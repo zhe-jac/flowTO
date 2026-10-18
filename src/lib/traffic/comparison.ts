@@ -5,6 +5,7 @@ import { affectedRoadIds } from "../road-extent";
 
 /** One shared effective plan for road colours, animation, statistics and details. */
 export function comparisonImpacts(plan: ReroutingPlan | null | undefined, items: Disruption[], placedAt: ReadonlyMap<string, DisruptionPlacement>, minutes: number, mode: "before" | "after", date?: string) {
+  if (plan?.simulation) return { impacts: mode === "before" ? plan.simulation.baseline : { ...plan.simulation.baseline, ...plan.impacts }, closed: new Set(mode === "before" ? [] : plan.simulation.closed) };
   const impacts: Record<string, Impact> = {};
   const closed = new Set<string>();
   if (mode === "before") return { impacts, closed };

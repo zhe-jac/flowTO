@@ -21,6 +21,15 @@ export type DirectionState = {
     freeSpeedKmh: number;
     level: CongestionLevel;
 };
+export function congestionForState(state: Pick<DirectionState, "speedKmh" | "freeSpeedKmh">) {
+    const fraction = state.freeSpeedKmh > 0 ? state.speedKmh / state.freeSpeedKmh : 1;
+    const stops = [1, 0.8, 0.55, 0.25];
+    for (let i = 1; i < stops.length; i++) if (fraction >= stops[i]) return Math.max(0, i - 1 + (stops[i - 1] - fraction) / (stops[i - 1] - stops[i]));
+    return 3;
+}
+export function levelForSpeed(speedKmh: number, freeSpeedKmh: number): CongestionLevel {
+    return LEVELS[Math.min(3, Math.floor(congestionForState({ speedKmh, freeSpeedKmh })))].id;
+}
 export const MINUTES_PER_DAY = 1440;
 export function profileShare(profile: number[], minutes: number) {
     const position = (((minutes - 7.5) / 15) % 96 + 96) % 96;
@@ -61,7 +70,8 @@ export function directionState(segment: Pick<TrafficSegment, "cls" | "oneway" | 
     const ratio = flow / capacity;
     const assumption = CLASS_ASSUMPTIONS[segment.cls] ?? CLASS_ASSUMPTIONS.Local;
     const freeSpeedKmh = assumption.freeSpeedKmh * factors.speed;
-    return { flow, capacity, ratio, freeSpeedKmh, speedKmh: congestedSpeed(freeSpeedKmh, ratio), level: levelFor(ratio) };
+    const speedKmh = congestedSpeed(freeSpeedKmh, ratio);
+    return { flow, capacity, ratio, freeSpeedKmh, speedKmh, level: levelForSpeed(speedKmh, freeSpeedKmh) };
 }
 export function vehiclesOnRoad(segment: Pick<TrafficSegment, "cls" | "oneway" | "weekdayDaily" | "weekendDaily" | "lengthM">, share: number, day: DayType = "weekday", weather: WeatherRates = DRY_WEATHER) {
     const state = directionState(segment, share, day, weather);

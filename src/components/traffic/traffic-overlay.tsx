@@ -14,13 +14,13 @@ import { CLASS_WIDTHS, congestionColor } from "@/lib/traffic/colors";
 import { closedRoadIds } from "@/lib/traffic/disruptions";
 import { continuousPulseOffset, PULSE_SPACING } from "@/lib/traffic/flow-motion";
 import { createTrafficViewport } from "@/lib/traffic/viewport";
-import { congestionPosition, directionState, profileShare } from "@/lib/traffic/model";
+import { congestionForState, directionState, profileShare } from "@/lib/traffic/model";
 import type { DayType, TrafficData, TrafficSegment } from "@/lib/traffic/types";
 import { FlowPathLayer } from "./flow-path-layer";
 import { useWorkspaceLayout, WorkspaceNotice } from "../workspace-layout";
 import RoadPanel from "./road-panel";
 import TrafficControls from "./traffic-controls";
-import { impactedState } from "@/lib/traffic/rerouting";
+import { impactPriority, impactedState } from "@/lib/traffic/rerouting";
 import { disruptionStrength, disruptionWindow, splitPath, type DisruptionPlacement } from "@/lib/traffic/scenario-timing";
 import { formatClock } from "@/lib/traffic/model";
 import { tweenValue, retargetTween, junctionBlend, COLOUR_TRANSITION_MS, HIGHLIGHT_TRANSITION_MS, type VisualTween } from "@/lib/traffic/visual-transition";
@@ -113,12 +113,12 @@ export default function TrafficOverlay({ map, renderer, items, interacting, onLi
     const [compare, setCompare] = useState<"before" | "after">("after");
     const strengths = items.map((item) => disruptionStrength(item, placedAtRef.current.get(item.id) ?? snapshot.clock.minutes, snapshot.clock.minutes, snapshot.clock.date));
     const nextStart = items.map((item, i) => strengths[i] > 0 ? null : disruptionWindow(item, placedAtRef.current.get(item.id) ?? 0, snapshot.clock.date).start).filter((start): start is number => start !== null && start > snapshot.clock.minutes).sort((a, b) => a - b)[0] ?? null;
-    const activeItems = items.filter((_, i) => strengths[i] > 0);
-    const rerouting = useRerouting(activeItems, snapshot.clock.day, snapshot.clock.minutes, weather, snapshot.clock.date);
+    const rerouting = useRerouting(items, snapshot.clock.day, snapshot.clock.minutes, weather, snapshot.clock.date, placedAtRef.current);
     const impacts = rerouting.plan?.impacts;
-    const impactKey = JSON.stringify(rerouting.plan ?? {});
+    const impactKey = useMemo(() => rerouting.plan?.simulation ? `${rerouting.plan.simulation.runKey}:${rerouting.plan.simulation.minute}` : JSON.stringify(rerouting.plan ?? {}), [rerouting.plan]);
     const displayed = comparisonImpacts(rerouting.plan, items, placedAtRef.current, snapshot.clock.minutes, compare, snapshot.clock.date);
-    const chatKey = JSON.stringify({ date: snapshot.clock.date, minutes: Math.floor(snapshot.clock.minutes), day: snapshot.clock.day, source: rerouting.loading ? "pending" : rerouting.plan?.source ?? "baseline", impacts: displayed.impacts });
+    const chatMinute = Math.floor(snapshot.clock.minutes);
+    const chatKey = useMemo(() => JSON.stringify({ date: snapshot.clock.date, minutes: chatMinute, day: snapshot.clock.day, source: rerouting.loading ? "pending" : rerouting.plan?.source ?? "baseline", impacts: Object.fromEntries(Object.entries(compare === "after" ? rerouting.plan?.impacts ?? {} : {}).sort((a, b) => impactPriority(b[1]) - impactPriority(a[1])).slice(0, 100)) }), [chatMinute, snapshot.clock.date, snapshot.clock.day, rerouting.loading, rerouting.plan, compare]);
     useEffect(() => {
         onChatContext(JSON.parse(chatKey));
     }, [chatKey, onChatContext]);
@@ -230,7 +230,7 @@ export default function TrafficOverlay({ map, renderer, items, interacting, onLi
                 for (const flow of flowsBySegment[index]) {
                     const total = pathLength(flow.path);
                     let travelled = 0;
-                    for (const path of splitPath(flow.path, WAVE_PIECE_M)) {
+                    for (const path of splitPath(flow.path, latestRef.current.plan?.simulation ? 8 : WAVE_PIECE_M)) {
                         const length = pathLength(path);
                         const centre = travelled + length / 2;
                         pieces.push({ flow, path, fromStartM: centre, fromEndM: total - centre });
@@ -260,9 +260,12 @@ export default function TrafficOverlay({ map, renderer, items, interacting, onLi
             const impacts = effective.impacts;
             const share = profileShare(data.profiles[day], minutes);
             const segmentStates = segments.map(segment => impactedState(segment, share, day, impacts[segment.id], weather, activity));
-            const states = flows.map(flow => segments[flow.segment].oneway === 0 && impacts[segments[flow.segment].id]?.addedByDirection ? impactedState(segments[flow.segment], share, day, impacts[segments[flow.segment].id], weather, activity, flow.direction) : segmentStates[flow.segment]);
-            states.forEach((state, index) => { targetLevels[index] = congestionPosition(state.ratio); });
-            vehicles = flows.reduce((sum, flow) => sum + (effectiveClosed.has(segments[flow.segment].id) ? 0 : states[flow.index].flow / Math.max(1, states[flow.index].speedKmh) * segments[flow.segment].lengthM / 1000), 0);
+            const states = flows.map(flow => segments[flow.segment].oneway === 0 && (impacts[segments[flow.segment].id]?.addedByDirection || impacts[segments[flow.segment].id]?.statesByDirection) ? impactedState(segments[flow.segment], share, day, impacts[segments[flow.segment].id], weather, activity, flow.direction) : segmentStates[flow.segment]);
+            states.forEach((state, index) => { targetLevels[index] = congestionForState(state); });
+            vehicles = flows.reduce((sum, flow) => {
+                const state = states[flow.index];
+                return sum + ("vehicles" in state ? Number(state.vehicles) : effectiveClosed.has(segments[flow.segment].id) ? 0 : state.flow / Math.max(1, state.speedKmh) * segments[flow.segment].lengthM / 1000);
+            }, 0);
             let colorsChanged = false;
             let speedsChanged = false;
             flows.forEach((flow, index) => {
@@ -274,7 +277,7 @@ export default function TrafficOverlay({ map, renderer, items, interacting, onLi
                     flowColors.set([r, g, b, alpha], offset);
                     colorsChanged = true;
                 }
-                const speed = Math.round(Math.max(0.25, state.speedKmh / 7) * 4) / 4;
+                const speed = Math.round(Math.max(0, state.speedKmh / 7) * 4) / 4;
                 if (flowSpeeds[index] !== speed) {
                     flowPhases[index] = continuousPulseOffset(flowPhases[index], flowSpeeds[index], speed, animationTime);
                     flowSpeeds[index] = speed;
@@ -334,7 +337,7 @@ export default function TrafficOverlay({ map, renderer, items, interacting, onLi
             for (const id of ids) {
                 const index = segmentIndex.get(id);
                 if (index === undefined) continue;
-                const baseline = congestionPosition(directionState(segments[index], share, day, weather, activity).ratio);
+                const baseline = congestionForState(directionState(segments[index], share, day, weather, activity));
                 for (const flow of flowsBySegment[index]) colourTweens.set(flow.index, retargetTween(colourTweens.get(flow.index), displayLevel.get(flow.index) ?? baseline, now, colourDuration, baseline));
                 emphasisTweens.set(index, retargetTween(emphasisTweens.get(index), highlighted.has(index) ? 1 : 0, now, preference.matches ? 0 : HIGHLIGHT_TRANSITION_MS, 0));
             }
@@ -539,8 +542,8 @@ export default function TrafficOverlay({ map, renderer, items, interacting, onLi
     };
     const selectedSegment = data && selected !== null && !interacting && panel === "road" ? data.segments[selected] : null;
     return (<div className="traffic-ui" data-interacting={interacting}>
-      {data ? <TrafficControls clock={snapshot.clock} profile={data.profiles[snapshot.clock.day]} vehicles={snapshot.vehicles} closures={displayed.closed.size} onChange={updateClock} scenario={items.length ? { text: [compare === "before" ? "Showing before disruptions" : strengths.every((value) => value === 0) && nextStart !== null ? `Disruptions start ${nextStart >= 1440 ? `${shiftSimulationDate(snapshot.clock.date, Math.floor(nextStart / 1440))} at ` : "at "}${formatClock(nextStart)}` : Math.max(...strengths) < 1 ? "Effects building up" : null, rerouting.loading ? "Estimating diversions…" : rerouting.error ?? (rerouting.plan?.warning ? "Local diversion estimate (Gemini unavailable)" : rerouting.plan?.source === "gemini" ? "Diversions estimated with Gemini" : "Local diversion estimate")].filter(Boolean).join(" · "), retry: rerouting.error || rerouting.plan?.warning ? rerouting.retry : undefined, compare, onCompare: setCompare } : null} /> : null}
-      {selectedSegment && data ? <RoadPanel activity={{ minutes: snapshot.clock.minutes, date: snapshot.clock.date, suppressedVenues: compare === "after" ? suppressedVenues(activeItems) : [] }} weather={weather} segment={selectedSegment} data={data} clock={snapshot.clock} impact={displayed.impacts[selectedSegment.id]} closed={displayed.closed.has(selectedSegment.id)} onClose={() => { setSelected(null); setPanel(null); }}/> : null}
+      {data ? <TrafficControls clock={snapshot.clock} profile={data.profiles[snapshot.clock.day]} vehicles={snapshot.vehicles} closures={displayed.closed.size} onChange={updateClock} scenario={items.length || rerouting.plan ? { text: [compare === "before" ? "Showing before disruptions" : !rerouting.plan?.simulation && strengths.every((value) => value === 0) && nextStart !== null ? `Disruptions start ${nextStart >= 1440 ? `${shiftSimulationDate(snapshot.clock.date, Math.floor(nextStart / 1440))} at ` : "at "}${formatClock(nextStart)}` : rerouting.plan?.simulation && strengths.every(value => value === 0) && rerouting.plan.simulation.ledger.onNetwork > rerouting.plan.simulation.baselineLedger.onNetwork + 1 ? "Queues clearing" : !rerouting.plan?.simulation && Math.max(...strengths) < 1 ? "Effects building up" : null, rerouting.loading ? "Simulating traffic…" : rerouting.error ?? (rerouting.plan?.warning ? "Local diversion estimate (Gemini unavailable)" : rerouting.plan?.source === "solver" ? "Dynamic traffic estimate" : "Local diversion estimate")].filter(Boolean).join(" · "), retry: rerouting.error || rerouting.plan?.warning ? rerouting.retry : undefined, compare, onCompare: setCompare } : null} /> : null}
+      {selectedSegment && data ? <RoadPanel activity={{ minutes: snapshot.clock.minutes, date: snapshot.clock.date, suppressedVenues: compare === "after" ? suppressedVenues(items.filter((_, i) => strengths[i] > 0)) : [] }} weather={weather} segment={selectedSegment} data={data} clock={snapshot.clock} impact={displayed.impacts[selectedSegment.id]} closed={displayed.closed.has(selectedSegment.id)} onClose={() => { setSelected(null); setPanel(null); }}/> : null}
       {!data && !error ? <WorkspaceNotice><p className="traffic-status" role="status">Loading typical traffic…</p></WorkspaceNotice> : null}
       {error ? <WorkspaceNotice><p className="traffic-status traffic-status-error" role="alert">{error} <button type="button" onClick={() => { setError(null); setRetry((value) => value + 1); }}>Retry</button></p></WorkspaceNotice> : null}
     </div>);

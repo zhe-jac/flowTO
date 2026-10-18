@@ -3,7 +3,7 @@ import type { WeatherRates } from "@/lib/weather";
 import { weatherFactors, WEATHER_TRAFFIC_SOURCE } from "@/lib/traffic/weather";
 import type { ClockState } from "@/lib/traffic/clock";
 import { congestionColor } from "@/lib/traffic/colors";
-import { congestionPosition, directionState, formatClock, LEVELS, MINUTES_PER_DAY, profileShare, travelDirection } from "@/lib/traffic/model";
+import { congestionForState, directionState, formatClock, LEVELS, MINUTES_PER_DAY, profileShare, travelDirection } from "@/lib/traffic/model";
 import { CLASS_ASSUMPTIONS, type TrafficData, type TrafficSegment } from "@/lib/traffic/types";
 import { WorkspacePanel } from "../workspace-layout";
 import { impactedDirectionStates, type Impact } from "@/lib/traffic/rerouting";
@@ -58,11 +58,12 @@ export default function RoadPanel({ segment, data, clock, closed, impact, weathe
     const share = profileShare(profile, clock.minutes);
     const movement = impactedDirectionStates(segment, share, clock.day, impact, weather, activity ?? { minutes: clock.minutes, date: clock.date })[0];
     const state = movement.state;
+    const baselineState = impact?.baselineStatesByDirection?.[movement.direction === 1 ? 0 : 1];
     const movementLabel = travelDirection(movement.direction === 1 ? segment.coords[0] : segment.coords.at(-1)!, movement.direction === 1 ? segment.coords.at(-1)! : segment.coords[0]);
     const factors = weatherFactors(segment.cls, weather);
     const weatherActive = factors.speed < 1 || factors.capacity < 1;
     const level = LEVELS.find((item) => item.id === state.level)!;
-    const color = `rgb(${congestionColor(congestionPosition(state.ratio)).join(",")})`;
+    const color = `rgb(${congestionColor(congestionForState(state)).join(",")})`;
     const assumption = CLASS_ASSUMPTIONS[segment.cls];
     const daily = clock.day === "weekday" ? segment.weekdayDaily : segment.weekendDaily;
     const labels = directions(segment);
@@ -89,11 +90,13 @@ export default function RoadPanel({ segment, data, clock, closed, impact, weathe
 
       <dl className="road-panel-stats">
         <div><dt>Vehicles / hour</dt><dd>{Math.round(state.flow).toLocaleString()}<small>{` ${movementLabel.toLowerCase()}${labels.length > 1 ? " · busiest" : ""}`}</small></dd></div>
-        <div><dt>Road capacity used</dt><dd>{Math.round(state.ratio * 100)}%</dd></div>
+        <div><dt>Throughput / capacity</dt><dd>{Math.round(state.ratio * 100)}%</dd></div>
         <div><dt>Estimated speed</dt><dd>{Math.round(state.speedKmh)}<small> km/h</small></dd></div>
+        {"queueVehicles" in state ? <div><dt>Vehicles queued</dt><dd>{Math.round(Number(state.queueVehicles)).toLocaleString()}</dd></div> : null}
+        {baselineState && "queueVehicles" in state ? <div><dt>Additional queue</dt><dd>{Math.round(Math.max(0, Number(state.queueVehicles) - baselineState.queueVehicles)).toLocaleString()}<small> vehicles</small></dd></div> : null}
         <div><dt>Baseline vehicles / day</dt><dd>{daily.toLocaleString()}<small> total</small></dd></div>
       </dl>
-      {impact ? <p className="road-panel-note">Scenario estimate includes diverted traffic and reduced capacity. The daily chart excludes disruptions and uses the same weather.</p> : null}
+      {impact ? <p className="road-panel-note">The scenario tracks traffic, queues and recovery in a local road network. The daily chart shows historical demand.</p> : null}
 
       <figure className="road-panel-chart">
         <figcaption>Capacity used through a typical {clock.day}{weatherActive ? " · selected weather" : ""}</figcaption>
@@ -107,6 +110,7 @@ export default function RoadPanel({ segment, data, clock, closed, impact, weathe
       </figure>
 
       <p className="road-panel-source">{sourceText(segment)}</p>
+      {daily < 100 && segment.source.kind === "intersection" ? <p className="road-panel-source">Very low historical count. Existing restrictions may already be reflected in this baseline.</p> : null}
       {weatherActive ? <p className="road-panel-source">Weather lowers assumed uncongested speed by {Math.round((1 - factors.speed) * 100)}% and capacity by {Math.round((1 - factors.capacity) * 100)}%. Demand stays unchanged. <a href={WEATHER_TRAFFIC_SOURCE} target="_blank" rel="noreferrer">Research-informed estimate</a>; not calibrated to Toronto weather.</p> : null}
     </aside></div></WorkspacePanel>);
 }
