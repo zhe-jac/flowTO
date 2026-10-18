@@ -61,6 +61,8 @@ Add your keys to `.env.local`, then open http://localhost:3000.
 
 The simulation needs a long-running Node server (`pnpm dev` or `pnpm start`), not serverless functions.
 
+For Render, use the included [`render.yaml`](render.yaml) Blueprint. See [the deployment guide](docs/render-deployment.md) for environment variables, compute settings and verification.
+
 | Script | What it does |
 |---|---|
 | `pnpm dev` / `build` / `start` | Develop, build and serve |

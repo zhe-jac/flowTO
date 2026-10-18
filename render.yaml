@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: flowto
+    runtime: node
+    branch: main
+    region: ohio
+    plan: free
+    numInstances: 1
+    buildCommand: corepack pnpm install --frozen-lockfile --prod=false && corepack pnpm build
+    startCommand: corepack pnpm start --hostname 0.0.0.0
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        sync: false
