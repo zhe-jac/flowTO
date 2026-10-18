@@ -3460,8 +3460,15 @@ button {
   --workspace-tools-top: max(80px, calc(50% - (var(--workspace-rail-count) * 60px - 12px) / 2));
 }
 
+/* Left-side panels are centred vertically on the middle rail button (the middle of the screen). Equal top and bottom
+   insets keep that centre while staying clear of the timeline; taller panels scroll inside. */
 .workspace-layout:is([data-panel="toolbox"], [data-panel="editor"], [data-panel="weather"], [data-panel="results"]) .workspace-side-panel {
-  top: calc(var(--workspace-timeline-bottom) + 40px);
+  top: calc(var(--workspace-timeline-bottom) + 16px);
+  bottom: calc(var(--workspace-timeline-bottom) + 16px);
+}
+
+.workspace-layout:is([data-panel="toolbox"], [data-panel="editor"], [data-panel="weather"], [data-panel="results"]) .workspace-panel-content {
+  align-items: center;
 }
 
 /* Street info pops in from its corner when a road is clicked. */
