@@ -21,12 +21,12 @@ These tasks come after the core demo workflow is reliable, even where the origin
 - [ ] **Camera presets:** buttons to jump to Downtown, Gardiner/DVP, Midtown, North York Centre and Scarborough Centre.
 - [ ] **Map layers:** satellite imagery and other optional basemap/layer choices.
 - [ ] **Playback windows:** AM rush, midday, PM rush and custom time windows, plus convenient time-jump controls.
-- [ ] **Results/dashboard:** baseline-versus-scenario metrics, affected-road rankings and comparison charts. Add ward results, emissions and other outcome scores only when the model supports them.
+- [x] **Results/dashboard:** (branch `feat/tiger-dashboard`) Results panel with extra delay, peak extra vehicles, unfinished trips, worst street, a normal-day-vs-scenario chart and a clickable most-affected-streets list. Original note: baseline-versus-scenario metrics, affected-road rankings and comparison charts. Add ward results, emissions and other outcome scores only when the model supports them.
 - [ ] **Sharing:** links that restore a scenario, followed by exports or saved-scenario browsing as needed.
 - [ ] **Documentation:** update the README and implementation checklist; add methodology, data sources/versions, assumptions, limitations and validation results.
 - [ ] **Localised weather:** draw/select smaller weather areas. Citywide Toronto weather is sufficient for the demo.
-- [ ] **Scenario/test database:** save scenario inputs, dates, model/data versions and measured or estimated results from many runs.
-- [ ] **Cross-run analysis:** use those saved runs to compare scenarios in graphs and tables and explore larger traffic patterns over time; distinguish repeatable estimates from observed outcomes.
+- [x] **Scenario/test database:** (branch `feat/tiger-dashboard`) Tiger Data / Timescale: `scenario_runs` plus the `run_metrics` hypertable, enabled by `TIGER_DATABASE_URL`. Original note: save scenario inputs, dates, model/data versions and measured or estimated results from many runs.
+- [x] **Cross-run analysis:** (branch `feat/tiger-dashboard`, first version) saved runs compared by extra delay, and extra vehicles by hour across runs from the `run_metrics_hourly` continuous aggregate. Original note: use those saved runs to compare scenarios in graphs and tables and explore larger traffic patterns over time; distinguish repeatable estimates from observed outcomes.
 
 **Keep as-is for now:** the existing map/UI, Before/After toggle, rerouting and citywide weather are good enough. Side-by-side/swipe comparisons and further cosmetic map work are optional final-stage polish, not demo blockers.
 
